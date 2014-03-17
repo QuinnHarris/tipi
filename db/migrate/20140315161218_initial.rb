@@ -39,7 +39,7 @@ class Initial < ActiveRecord::Migration
         ['record_id', 'version'].each do |name|
           execute "CREATE SEQUENCE #{table_name}_#{name}_seq
                           OWNED BY #{table_name}.#{name}"
-          # Owned by causes Postgres to drop the sequence when the table is dropped
+          # OWNED BY causes Postgres to drop the sequence when the table is dropped
         end
       end
     end

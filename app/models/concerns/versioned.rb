@@ -9,6 +9,8 @@ module Versioned
 
     belongs_to :branch
 
+    scope :where_branch, -> (branch) { where(branch.branch_where(self.table_name)) }
+
     # Clear version just like id is cleared when record.dup
     def initialize_dup(other)
       super other

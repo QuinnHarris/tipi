@@ -13,46 +13,38 @@ class Branch < ActiveRecord::Base
     successors.create(options)
   end
 
-  def view_where(version = nil)
-    temp = Arel::Table.new(self.class.table_name)
+  # SQL where clause to include only objects from this branch (and predecessors)
+  # pass table_name and an optional maximum version number.
+  # This does not handle returning multiple versions with the same record_id if different branche relations with different version locks refers to the same record_id
+  # This assumes a higher branch id always implies that it is a successor.  This is true if branches relations can NOT be changed after creation.
+  def branch_where(table_name, version = nil)
+    temp = Arel::Table.new(table_name)
 
-    next_views = [self => version]
-    all_views = []
+    next_branchs = [[self, version]]
+    all_branchs = []
 
     expr = nil
 
-    until next_views.empty?
-      next_views = next_views.collect do |view, ver|
-        e = temp[:view_id].eq(view.id)
-        e = e.and(temp[:version].lteq(ver)) if ver
+    until next_branchs.empty?
+      next_branchs = next_branchs.collect do |branch, ver|
+        e = temp[:branch_id].eq(branch.id)
+        e = e.and(temp[:version].lteq([ver, version].compact.min)) if ver || version
         expr = expr ? expr.or(e) : e
 
-        all_views << view
-        view.predicessors.collect do |relation|
-          { relation.predecessor => relation.version }
+        all_branchs << branch
+        branch.pre_relations.collect do |relation|
+          next nil if all_branchs.include?(relation.predecessor)
+          [ relation.predecessor, relation.version ]
         end
-      end.flatten.uniq
-      next_views -= all_views
+      end.flatten.compact.uniq
     end
     
-    # Condition for this template
-    expr = temp[:template_id].eq(id)
-    expr = expr.and(temp[:version].lte(version)) if version
-
-    current = self
-    while current.predicessor_id
-      expr = expr.or(temp[:template_id].eq(current.predicessor_id)
-                       .and(temp[:version].lteq(current.predicessor_version)))
-      current = current.predicessor
-    end
-
-    # max(id) and max(version) should always select the same record
-    # if templates can't change predicessor_id and predicessor_version then max(id) and closest template should be the same record
-    # What happens if predicessor_version changes?  Only do on merge operation and force updated records on conflicts or change this to account for template precidence
-    # Can a template ever change its predicessor?
-    query = temp.project(Arel.sql('max(id)')) 
+    query = temp.project(Arel.sql('record_id, max(branch_id) AS branch_id, max(version) AS version')) 
     query.where(expr)
-    query.group(:node_id)
-    query.to_sql
+    query.group(:record_id)
+    
+    # Should probably use Arel but need to study and probably extend
+    select = %w(record_id branch_id version).collect { |s| "\"#{table_name}\".\"#{s}\"" }.join(', ')
+    "(#{select}) IN (#{query.to_sql})"
   end
 end
