@@ -3,4 +3,4 @@
 
 require File.expand_path('../config/application', __FILE__)
 
-Exosphere::Application.load_tasks
+Tipi::Application.load_tasks

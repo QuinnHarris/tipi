@@ -9,4 +9,4 @@
 
 # Make sure your secret_key_base is kept private
 # if you're sharing your code publicly.
-Exosphere::Application.config.secret_key_base = '8ceea0ff2fc721d9fa855555ef7e7ee0bb64f16c35189ff918e8ecb81bedce1e7c1ed43f18f6e6b82c560efd668bfbb97f2ee1f629a02662c69e924ccbcdfb52'
+Tipi::Application.config.secret_key_base = '8ceea0ff2fc721d9fa855555ef7e7ee0bb64f16c35189ff918e8ecb81bedce1e7c1ed43f18f6e6b82c560efd668bfbb97f2ee1f629a02662c69e924ccbcdfb52'

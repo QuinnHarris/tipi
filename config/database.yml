@@ -5,7 +5,7 @@
 #   gem 'sqlite3'
 development:
   adapter: postgresql
-  database: exosphere_development
+  database: tipi_development
   username:
   password:
   host:
@@ -17,7 +17,7 @@ development:
 # Do not set this db to the same as development or production.
 test:
   adapter: postgresql
-  database: exosphere_test
+  database: tipi_test
   username:
   password:
   host:
@@ -26,7 +26,7 @@ test:
 
 production:
   adapter: postgresql
-  database: exosphere_production
+  database: tipi_production
   username:
   password:
   host:
