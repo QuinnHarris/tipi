@@ -1,2 +1,2 @@
-class NodeInstance < ActiveRecord::Base
+class NodeInstance < Sequel::Model
 end

@@ -1,2 +1,2 @@
-class Edge < ActiveRecord::Base
+class Edge < Sequel::Model
 end

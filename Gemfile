@@ -3,9 +3,9 @@ source 'https://rubygems.org'
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '4.0.3'
 
-# Use postgresql as the database for Active Record
+# Use sequel instead of Active Record
 gem 'pg'
-gem 'foreigner'
+gem 'sequel-rails'
 
 # Resources
 gem 'sass-rails', '~> 4.0.0'
@@ -43,5 +43,6 @@ gem 'debugger', group: [:development, :test]
 
 
 gem 'devise'
+gem 'sequel-devise'
 #gem 'omniauth'
 #gem 'omniauth-facebook'
