@@ -7,6 +7,9 @@ module Versioned
   included do
     many_to_one :branch
 
+    # Determined automatically with PostgreSQL
+    #primary_key [:record_id, :branch_id, :version
+
     # scope :where_branch, -> (branch) { where(branch.branch_where(self.table_name)) }
 
     def new(new_values = {}, &block)

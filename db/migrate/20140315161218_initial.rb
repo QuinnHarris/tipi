@@ -8,7 +8,9 @@ module Sequel
           "#{prefix && "#{prefix}_"}#{column}".to_sym
         end
 
-        columns.each { |name| Integer name, null: false }
+        columns.each do |name|
+          Integer name, null: false, default: (name == :version) ? { :sequence => 'version_seq' } : nil
+        end
 
         unless prefix
           primary_key columns
@@ -32,6 +34,50 @@ module Sequel
   end
 
   class Database
+    # Ideally this would be submitted to the Sequel project
+    def create_sequence_sql(name, options)
+      # Need to implement INCREMENT, MINVALUE, MAXVALUE, START, CACHE, CYCLE
+      sql = "CREATE #{temporary_table_sql if options[:temp]}SEQUENCE #{options[:temp] ? quote_identifier(name) : quote_schema_table(name)}"
+      sql += " INCREMENT BY #{options[:increment]}" if options[:increment]
+      sql += " MINVALUE #{options[:minvalue]}" if options[:minvalue]
+      sql += " MAXVALUE #{options[:maxvalue]}" if options[:maxvalue]
+      sql += " START WITH #{options[:start]}" if options[:start]
+      sql += " CACHE #{options[:cache]}" if options[:cache]
+      sql += " CYCLE" if options[:cycle]
+      sql += " OWNED BY #{options[:ownedby_table]}.#{options[:ownedby_column]}" if options[:ownedby_table]
+      sql
+    end
+
+    def create_sequence(name, options=OPTS)
+      run(create_sequence_sql(name, options))
+    end
+
+    # Monkey patchs to Sequel from database/schema_methods.rb
+
+    # Enable alter_table_op_sql to support sequences on default values
+    # Is there a better way?  Can literal function support unquoted output?
+    alias_method :alter_table_op_sql_orig, :alter_table_op_sql
+    def alter_table_op_sql(table, op)
+      if op[:op] == :set_column_default and op[:default][:sequence]
+        quoted_name = quote_identifier(op[:name]) if op[:name]
+        "ALTER COLUMN #{quoted_name} SET DEFAULT nextval(#{literal(op[:default][:sequence])}::regclass)"
+      else
+        alter_table_op_sql_orig(table, op)
+      end
+    end
+
+    # Copied and modified from original
+    # Add default SQL fragment to column creation SQL.
+    def column_definition_default_sql(sql, column)
+      return unless column.include?(:default)
+      if column[:default].is_a?(Hash) && column[:default].include?(:sequence)
+        sql << " DEFAULT nextval(#{literal(column[:default][:sequence])}::regclass)"
+      else
+        sql << " DEFAULT #{literal(column[:default])}"
+      end
+    end
+
+
     def create_version_table(table_name, options = {}, &block)
       create_table(table_name, options) do
         version_columns
@@ -40,23 +86,21 @@ module Sequel
 
         instance_eval(&block)
       end
-  
-      # Create record_id and version sequence much like id.
-      ['record_id', 'version'].each do |column_name|
-        sequence_name = "#{table_name}_#{column_name}_seq"
-        run "CREATE SEQUENCE #{sequence_name}
-                           OWNED BY #{table_name}.#{column_name}"
-        # OWNED BY causes Postgres to drop the sequence when the table is dropped
 
-        run "ALTER TABLE #{table_name} ALTER COLUMN #{column_name}
-                         SET DEFAULT nextval('#{sequence_name}'::regclass)"
-      end
+      # OWNED BY causes Postgres to drop the sequence when the table is dropped
+      sequence_name = "#{table_name}_record_id_seq"
+      create_sequence(sequence_name,
+                      ownedby_table: table_name, ownedby_column: :record_id)
+      set_column_default(table_name, :record_id, sequence: sequence_name)
     end
   end
 end
 
 Sequel.migration do
   change do
+    # Global version sequence
+    create_sequence(:version_seq)
+
     # Should the version sequence be global?  Would it be useful, will we overflow it.
     create_table :branches do
       primary_key   :id
@@ -68,8 +112,8 @@ Sequel.migration do
     end
 
     create_table :branch_relations do
-      foreign_key   :successor_id, :branches
       foreign_key   :predecessor_id, :branches
+      foreign_key   :successor_id, :branches
       primary_key   [:successor_id, :predecessor_id]
 
       # Index by both successor_id and predecessor_id (primary_key creates index)

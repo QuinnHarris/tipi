@@ -1,13 +1,13 @@
 class Branch < Sequel::Model
-  # has_many :pre_relations, class_name: 'BranchRelation', foreign_key: :successor_id
-  # has_many :suc_relations, class_name: 'BranchRelation', foreign_key: :predecessor_id
-  # has_many :predecessors, through: :pre_relations, source: :predecessor
-  # has_many :successors,   through: :suc_relations, source: :successor
-
-  many_to_many :predecessors, join_table: :branch_relations, class: self,
-                               right_key: :successor_id,  left_key: :predecessor_id
-  many_to_many :successors,   join_table: :branch_relations, class: self,
+  many_to_many :predecessors, join_table: :branch_relations, :class => self,
                                 left_key: :successor_id, right_key: :predecessor_id
+  many_to_many :successors,   join_table: :branch_relations, :class => self,
+                               right_key: :successor_id,  left_key: :predecessor_id
+
+
+  # Relations for all directly versioned objects
+  # Should implement on Versioned concern include
+  one_to_many :nodes
 
   # has_many :template_instances
 
@@ -16,6 +16,15 @@ class Branch < Sequel::Model
       o = self.class.create(options)
       add_successor(o)
       o
+    end
+  end
+
+  def self.merge!(options = {}, pred)
+    db.transaction do
+      o = create(options)
+      pred.each do |p|
+        o.add_predecessor(p)
+      end
     end
   end
 
@@ -54,23 +63,57 @@ class Branch < Sequel::Model
   #   "(#{select}) IN (#{query.to_sql})"
   # end
 
-  def branch_dataset(dataset, version = nil)
-    dataset.filter do |o|
-      next_branchs = [[self, version]]
-      all_branchs = []
+ # one_to_many :decendants, read_only: true,
+ #   dataset: proc do     
+ #   end
 
-      or_list = []
-      
-      until next_branchs.empty?
-        next_branchs = next_branchs.collect do |branch, ver|
-          exp = o.&( :branch_id => branch )
-          exp.args << o.<=( :version, [ver, version].compact.min ) if ver || version
-          or_list << exp
+  # Need to add version column
+  def branch_dataset(version = nil)
+    connect_table = :branch_relations
+    successor_array = [:successor_id]
+    predecessor_array = [:predecessor_id]
+    cte_table = :branch_decend
 
-          
-        end.flatten.compact.uniq
-      end
+    prkey_array = Array(primary_key)
 
-    end
+    # Select all columns from this table
+    #c_all = [Sequel::SQL::ColumnAll.new(model.table_name)]
+    select_cols = [:id]
+    
+    # Select this record as the start point of the recursive query
+    # Resulting dataset will include this record
+    base_ds = model.filter(prkey_array.zip(prkey_array.map { |k| send(k) }))
+    
+    # Connect from the working set (cte_table) through the connect_table back to this table
+    recursive_ds = model
+      .join(connect_table, predecessor_array.zip(prkey_array))
+      .join(cte_table, prkey_array.zip(successor_array))
+
+    # SQL::AliasedExpression.new(t, table_alias)).
+    model.from(cte_table)
+      .with_recursive(cte_table,
+                      base_ds.select(select_cols),
+                      recursive_ds.select(select_cols.map { |c| Sequel::SQL::QualifiedIdentifier.new(model.table_name, c) }),
+                      union_all: false)
   end
+
+#  def branch_dataset(dataset, version = nil)
+#    #Sequel.or
+#    dataset.filter do |o|
+#      next_branchs = [[self, version]]
+#      all_branchs = []
+#
+#      or_list = []
+#      
+#      until next_branchs.empty?
+#        next_branchs = next_branchs.collect do |branch, ver|
+#          exp = o.&( :branch_id => branch )
+#          exp.args << o.<=( :version, [ver, version].compact.min ) if ver || version
+#          or_list << exp
+#
+#          
+#        end.flatten.compact.uniq
+#      end
+#    end
+#  end
 end
