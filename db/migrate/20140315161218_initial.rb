@@ -101,7 +101,7 @@ module Sequel
 end
 
 Sequel.migration do
-  change do
+  up do
     # Global version sequence
     create_sequence(:version_seq)
 
@@ -124,7 +124,50 @@ Sequel.migration do
       index         [:predecessor_id, :successor_id], unique: true
 
       BigInt        :version
+
+      check { predecessor_id != successor_id }
     end
+
+    # Use stored proceedure and trigger to test for cycles
+    # This will not detect cycles when two transactions are opened simultaniously that together insert rows causing a cycle
+    run %(
+CREATE OR REPLACE FUNCTION cycle_test() RETURNS TRIGGER AS $cycle_test$
+DECLARE
+  cycle_path integer ARRAY;
+BEGIN
+  IF (TG_OP = 'UPDATE' AND
+      NEW.successor_id = OLD.successor_id AND
+      NEW.predecessor_id = OLD.predecessor_id) THEN
+    RETURN NULL;
+  END IF;
+
+  WITH RECURSIVE branch_decend AS (
+      SELECT NEW.predecessor_id AS id,
+             ARRAY[NEW.successor_id, NEW.predecessor_id] AS path,
+             false AS cycle
+    UNION
+      SELECT branch_relations.predecessor_id,
+             branch_decend.path || branch_relations.predecessor_id,
+	     branch_relations.predecessor_id = ANY(branch_decend.path)
+        FROM branch_relations
+	  INNER JOIN branch_decend
+	    ON branch_relations.successor_id = branch_decend.id
+        WHERE NOT branch_decend.cycle
+  ) SELECT path INTO cycle_path
+      FROM branch_decend WHERE cycle LIMIT 1;
+  
+  IF FOUND THEN
+    RAISE EXCEPTION 'cycle found %', cycle_path;
+  END IF;
+
+  RETURN NULL;
+END;
+$cycle_test$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER cycle_test
+  AFTER INSERT OR UPDATE ON branch_relations
+  FOR EACH ROW EXECUTE PROCEDURE cycle_test();
+)
 
     create_version_table :nodes do
       String        :type, null: false
