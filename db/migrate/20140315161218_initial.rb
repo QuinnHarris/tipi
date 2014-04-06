@@ -131,7 +131,7 @@ Sequel.migration do
     # Use stored proceedure and trigger to test for cycles
     # This will not detect cycles when two transactions are opened simultaniously that together insert rows causing a cycle
     run %(
-CREATE OR REPLACE FUNCTION cycle_test() RETURNS TRIGGER AS $cycle_test$
+CREATE FUNCTION cycle_test() RETURNS TRIGGER AS $cycle_test$
 DECLARE
   cycle_path integer ARRAY;
 BEGIN
@@ -142,16 +142,16 @@ BEGIN
   END IF;
 
   WITH RECURSIVE branch_decend AS (
-      SELECT NEW.predecessor_id AS id,
-             ARRAY[NEW.successor_id, NEW.predecessor_id] AS path,
+      SELECT NEW.successor_id AS id,
+             ARRAY[NEW.predecessor_id, NEW.successor_id] AS path,
              false AS cycle
     UNION
-      SELECT branch_relations.predecessor_id,
-             branch_decend.path || branch_relations.predecessor_id,
-	     branch_relations.predecessor_id = ANY(branch_decend.path)
+      SELECT branch_relations.successor_id,
+             branch_decend.path || branch_relations.successor_id,
+	     branch_relations.successor_id = ANY(branch_decend.path)
         FROM branch_relations
 	  INNER JOIN branch_decend
-	    ON branch_relations.successor_id = branch_decend.id
+	    ON branch_relations.predecessor_id = branch_decend.id
         WHERE NOT branch_decend.cycle
   ) SELECT path INTO cycle_path
       FROM branch_decend WHERE cycle LIMIT 1;
