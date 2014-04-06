@@ -9,7 +9,11 @@ module Sequel
         end
 
         columns.each do |name|
-          Integer name, null: false, default: (name == :version) ? { :sequence => 'version_seq' } : nil
+          if name == :version
+            Bignum name, null: false, default: { :sequence => 'version_seq' }
+          else
+            Integer name, null: false
+          end
         end
 
         unless prefix
@@ -119,7 +123,7 @@ Sequel.migration do
       # Index by both successor_id and predecessor_id (primary_key creates index)
       index         [:predecessor_id, :successor_id], unique: true
 
-      Integer       :version
+      BigInt        :version
     end
 
     create_version_table :nodes do

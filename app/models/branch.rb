@@ -4,6 +4,12 @@ class Branch < Sequel::Model
   many_to_many :successors,   join_table: :branch_relations, :class => self,
                                right_key: :successor_id,  left_key: :predecessor_id
 
+  def _add_successor(o, version = nil)
+    model.db[:branch_relations].insert(predecessor_id: id,
+                                       successor_id: o.id,
+                                       version: version)
+  end
+
 
   # Relations for all directly versioned objects
   # Should implement on Versioned concern include
@@ -11,109 +17,63 @@ class Branch < Sequel::Model
 
   # has_many :template_instances
 
+  # Create new successor branch from current branch
   def fork!(options = {})
+    version = options.delete(:version)
     db.transaction do
       o = self.class.create(options)
-      add_successor(o)
+      add_successor(o, version)
       o
     end
   end
 
-  def self.merge!(options = {}, pred)
+  # Create new successor branch from listed branches
+  # e.g.
+  #   Branch.merge!(branch_a, branch_b, name: 'Branch Name')
+  #   Branch.merge!(branch_list, name: 'Branch Name')
+  def self.merge!(*args)
+    options = args.pop
+    version = options.delete(:version)
     db.transaction do
       o = create(options)
-      pred.each do |p|
-        o.add_predecessor(p)
+      [args].flatten.each do |p|
+        p.add_successor(o, version)
       end
+      o
     end
   end
-
-  # # SQL where clause to include only objects from this branch (and predecessors)
-  # # pass table_name and an optional maximum version number.
-  # # This does not handle returning multiple versions with the same record_id if different branch relations with different version locks refers to the same record_id
-  # # This assumes a higher branch id always implies that it is a successor.  This is true if branches relations can NOT be changed after creation.
-  # def branch_where(table_name, version = nil)
-  #   temp = Arel::Table.new(table_name)
-
-  #   next_branchs = [[self, version]]
-  #   all_branchs = []
-
-  #   expr = nil
-
-  #   until next_branchs.empty?
-  #     next_branchs = next_branchs.collect do |branch, ver|
-  #       e = temp[:branch_id].eq(branch.id)
-  #       e = e.and(temp[:version].lteq([ver, version].compact.min)) if ver || version
-  #       expr = expr ? expr.or(e) : e
-
-  #       all_branchs << branch
-  #       branch.pre_relations.collect do |relation|
-  #         next nil if all_branchs.include?(relation.predecessor)
-  #         [ relation.predecessor, relation.version ]
-  #       end
-  #     end.flatten.compact.uniq
-  #   end
-    
-  #   query = temp.project(Arel.sql('record_id, max(branch_id) AS branch_id, max(version) AS version')) 
-  #   query.where(expr)
-  #   query.group(:record_id)
-    
-  #   # Should probably use Arel but need to study and probably extend
-  #   select = %w(record_id branch_id version).collect { |s| "\"#{table_name}\".\"#{s}\"" }.join(', ')
-  #   "(#{select}) IN (#{query.to_sql})"
-  # end
 
  # one_to_many :decendants, read_only: true,
  #   dataset: proc do     
  #   end
 
-  # Need to add version column
+  # Return dataset with this and all predecessor branch ids and maximum version number for that branch
   def branch_dataset(version = nil)
     connect_table = :branch_relations
-    successor_array = [:successor_id]
-    predecessor_array = [:predecessor_id]
     cte_table = :branch_decend
 
+    # All arrays must have same number of elements
     prkey_array = Array(primary_key)
+    successor_array = [:successor_id]
+    predecessor_array = [:predecessor_id]
 
-    # Select all columns from this table
-    #c_all = [Sequel::SQL::ColumnAll.new(model.table_name)]
-    select_cols = [:id]
+    version_col = :version
     
     # Select this record as the start point of the recursive query
-    # Resulting dataset will include this record
-    base_ds = model.filter(prkey_array.zip(prkey_array.map { |k| send(k) }))
+    # Include the version (or null) column used by recursive part
+    base_ds = db[].select(*(prkey_array.map { |k| Sequel.as(send(k), k) } +
+                                       [Sequel.as(Sequel.cast(version, :integer), version_col)] ) )
     
     # Connect from the working set (cte_table) through the connect_table back to this table
-    recursive_ds = model
-      .join(connect_table, predecessor_array.zip(prkey_array))
+    # Use the least (lowest) version number from the current version or the connect_table version
+    # This ensures the version column on the connect_table locks in all objects at or below that version
+    recursive_ds = db[connect_table]
       .join(cte_table, prkey_array.zip(successor_array))
+      .select(*( predecessor_array.map { |c| Sequel.qualify(connect_table, c) } +
+                 [Sequel.function(:LEAST, *[connect_table, cte_table].map { |t|
+                                    Sequel.qualify(t, version_col) })] ) )
 
-    # SQL::AliasedExpression.new(t, table_alias)).
     model.from(cte_table)
-      .with_recursive(cte_table,
-                      base_ds.select(select_cols),
-                      recursive_ds.select(select_cols.map { |c| Sequel::SQL::QualifiedIdentifier.new(model.table_name, c) }),
-                      union_all: false)
+      .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
   end
-
-#  def branch_dataset(dataset, version = nil)
-#    #Sequel.or
-#    dataset.filter do |o|
-#      next_branchs = [[self, version]]
-#      all_branchs = []
-#
-#      or_list = []
-#      
-#      until next_branchs.empty?
-#        next_branchs = next_branchs.collect do |branch, ver|
-#          exp = o.&( :branch_id => branch )
-#          exp.args << o.<=( :version, [ver, version].compact.min ) if ver || version
-#          or_list << exp
-#
-#          
-#        end.flatten.compact.uniq
-#      end
-#    end
-#  end
 end
