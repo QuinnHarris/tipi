@@ -11,6 +11,16 @@ class Node < Sequel::Model
                          right_key: keys.map { |k| "#{opposite}_#{k}".to_sym }
     # No timestamps on edges (:before_add
   end
+
+  # Temporary dataset that will be integrated into association
+  def temp_dataset_from(branch, version = nil)
+    branch_dataset = branch.branch_dataset(version)
+    
+    # record_id = this.record_id
+    # branch_id = this and successor branch_id
+    # version >= this.version and <= branch_id version from branch_dataset (max)
+
+  end
 end
 
 class Project < Node

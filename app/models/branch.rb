@@ -62,7 +62,7 @@ class Branch < Sequel::Model
     # Select this record as the start point of the recursive query
     # Include the version (or null) column used by recursive part
     base_ds = db[].select(*(prkey_array.map { |k| Sequel.as(send(k), k) } +
-                                       [Sequel.as(Sequel.cast(version, :integer), version_col)] ) )
+                                       [Sequel.as(Sequel.cast(version, :bigint), version_col)] ) )
     
     # Connect from the working set (cte_table) through the connect_table back to this table
     # Use the least (lowest) version number from the current version or the connect_table version
