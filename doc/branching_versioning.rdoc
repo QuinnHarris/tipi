@@ -1,0 +1,135 @@
+= Using Branching and Versioning
+
+== Create a Branch
+
+  branch_root = Branch.create(name: 'My Branch')
+
+== Create a successor branch called a fork
+
+  branch_left = branch_root.fork(name: 'Left')
+  branch_right = branch_root.fork(name: 'Right')
+
+== Merge multiple branches into one
+
+  branch_merge = Branch.merge(left, right, name: 'Merge')
+
+== Changing branch relations after created
+
+  branch_other = Branch.create(name: 'Other')
+
+  branch_root.add_successor(branch_other)
+or
+  branch_other.add_predecessor(branch_root)
+
+Cycles are not permitted so the following will produce an error
+
+  branch_merge.add_successor(branch_root)
+
+== Version Locks
+
+Branches can have version locks on the references to other branches so only objects created before the branch is created (or the specified version) will be within the branch.
+Add a :version_lock option to fork or merge or a second paramater to add_*
+If the value is true it will lock the current version, otherwise a version number or versioned object is expected
+
+  branch_left = branch_root.fork(name: 'Left', version_lock: true)
+
+or
+
+  branch_left = Branch.create(name: 'Left')
+  branch_root.add_successor(branch_left, 21)
+
+
+== Creating objects in branches
+
+All versioned objects must be part of a branch.  The branch can be passed as the branch parameter
+
+  node_a = Node.create(name: 'Node A', branch: branch_root)
+
+or versioned objects can be created within a branch context
+
+  branch_root.context do
+    node_a = Node.create(name: 'Node A')
+  end
+
+Contexts also open a transaction and are always recommended if there will be multiple queries (and inserts)
+For convinience blocks can be passed to create, fork or merge and will be the same as context block on the new branch
+
+  branch_root = Branch.create(name: 'Root') do
+    node_a = Node.create(name: 'Node A')
+  end
+
+== Creating new versions
+
+A new version of an existing object can be created with the new or create method on the old object.
+
+  branch_left.context do
+    node_a2 = node_a.create(data: 'v2')
+  end
+
+A new version can be created for any versioned object in the current or predecessor branches.
+By default new objects will stay in the branch of the original unless a new branch is specified or called within a context
+
+== Deleteting object
+
+Deleting an object is really just creating a new object that is marked as deleted
+
+  branch_merge.context do
+    node_a.delete
+  end
+
+== Querying versioned objects
+
+A versioned model, when called within a branch context will only return the latest version of objects within that branch
+
+  branch_root.context do
+    Node.all # Only returns nodes in the root branch
+    Node.dataset.all # These are the same
+  end
+
+This can be done outside a context by passing the branch to the dataset.
+
+  Node.dataset(branch_root).all
+
+Note that a context creates a temporary table representing all predecessor branches for use by many queries while using the dataset calculates this data as part of one query.
+
+Of course any normal operations can be performed on the dataset such as where
+
+   branch_root.context do
+     Node.where(:name => /A$/).first # Returns the latest version of the first node with a name ending with A in the root branch
+   end
+
+The version of context can be restricted by passing a version (or object with version method)
+
+  branch_root.context(version: 21) do
+    Node.all # Only returns objects with version number less than or equal to 21
+  end
+
+You can not create new objects in a version restricted context
+
+== Versioned object relations
+
+!!! Not yet implemented, work in progress
+
+Versioned relations work the same as non versioned relations except like versioned objects, operations must be performed in the context of a branch.
+
+  node_a = node_b = nil
+  branch_root.context do
+    node_a = Node.create(name: 'Node A')
+    node_b = Node.create(name: 'Node B')
+    node_a.add_to(node_b)
+  end
+
+  node_d = nil
+  branch_right.context do
+    node_c = Node.create(name: 'Node C')
+    node_a.add_to(node_c)
+    node_d = Node.create(name: 'Node D')
+  end
+
+  branch_merge.context do
+    node_a.add_to(node_d) # Can add edges to nodes exclusivly in predecessor branches
+    node_a.remove_to(node_b) # Can remove edges at any branch to
+  end
+= How branching and versioning works
+
+RTFS
