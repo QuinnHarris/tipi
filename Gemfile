@@ -46,3 +46,5 @@ gem 'devise'
 gem 'sequel-devise'
 #gem 'omniauth'
 #gem 'omniauth-facebook'
+
+gem 'foudation-rails'
