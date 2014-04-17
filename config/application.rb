@@ -42,6 +42,7 @@ module Tipi
     #config.sequel.load_database_tasks = false
 
     config.sequel.after_connect = proc do
+      Sequel::Model.db.extension :pg_array
       Sequel::Model.plugin :timestamps
     end
   end

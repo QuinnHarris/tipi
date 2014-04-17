@@ -4,6 +4,31 @@ class Branch < Sequel::Model
   many_to_many :successors,   join_table: :branch_relations, :class => self,
                                right_key: :successor_id,  left_key: :predecessor_id
 
+  private
+  def _version_param(version)
+    return nil unless version
+    return Sequel.cast(Sequel.function(:nextval, 'version_seq'), :regclass) if version == true
+    
+    # Do we need to check if version number isn't in the future or lower than a decendent version lock?
+    return version if version.is_a?(Integer)
+    version.version
+  end
+  
+  def _add_successor(o, version = nil)
+    model.db[:branch_relations].insert(predecessor_id: id,
+                                       successor_id: o.id,
+                                       version: _version_param(version))
+  end
+
+  def _add_predecessor(o, version = nil)
+    model.db[:branch_relations].insert(predecessor_id: o.id,
+                                       successor_id: id,
+                                       version: _version_param(version))
+
+    # If we have temp tables in a context they should be invalidated here
+  end
+
+  public
 
   # Relations for all directly versioned objects
   # Should implement on Versioned concern include
@@ -11,109 +36,156 @@ class Branch < Sequel::Model
 
   # has_many :template_instances
 
-  def fork!(options = {})
+  # Special create method that accepts a block within the context of the created block
+  def self.create(values = {}, &block)
+    if block_given?
+      db.transaction do
+        context(super(values, &nil), {}, &block)
+      end
+    else
+      super values
+    end
+  end
+
+  # Create new successor branch from current branch with option context block
+  def fork(options = {}, &block)
+    version = options.delete(:version_lock)
     db.transaction do
       o = self.class.create(options)
-      add_successor(o)
-      o
+      add_successor(o, version)
+      self.class.context(o, {}, &block)
     end
   end
 
-  def self.merge!(options = {}, pred)
+  # Create new successor branch from listed branches
+  # e.g.
+  #   Branch.merge!(branch_a, branch_b, name: 'Branch Name')
+  #   Branch.merge!(branch_list, name: 'Branch Name')
+  def self.merge(*args, &block)
+    options = args.pop
+    version = options.delete(:version_lock)
     db.transaction do
       o = create(options)
-      pred.each do |p|
-        o.add_predecessor(p)
+      [args].flatten.each do |p|
+        p.add_successor(o, version)
       end
+      context(o, {}, &block)
     end
   end
-
-  # # SQL where clause to include only objects from this branch (and predecessors)
-  # # pass table_name and an optional maximum version number.
-  # # This does not handle returning multiple versions with the same record_id if different branch relations with different version locks refers to the same record_id
-  # # This assumes a higher branch id always implies that it is a successor.  This is true if branches relations can NOT be changed after creation.
-  # def branch_where(table_name, version = nil)
-  #   temp = Arel::Table.new(table_name)
-
-  #   next_branchs = [[self, version]]
-  #   all_branchs = []
-
-  #   expr = nil
-
-  #   until next_branchs.empty?
-  #     next_branchs = next_branchs.collect do |branch, ver|
-  #       e = temp[:branch_id].eq(branch.id)
-  #       e = e.and(temp[:version].lteq([ver, version].compact.min)) if ver || version
-  #       expr = expr ? expr.or(e) : e
-
-  #       all_branchs << branch
-  #       branch.pre_relations.collect do |relation|
-  #         next nil if all_branchs.include?(relation.predecessor)
-  #         [ relation.predecessor, relation.version ]
-  #       end
-  #     end.flatten.compact.uniq
-  #   end
-    
-  #   query = temp.project(Arel.sql('record_id, max(branch_id) AS branch_id, max(version) AS version')) 
-  #   query.where(expr)
-  #   query.group(:record_id)
-    
-  #   # Should probably use Arel but need to study and probably extend
-  #   select = %w(record_id branch_id version).collect { |s| "\"#{table_name}\".\"#{s}\"" }.join(', ')
-  #   "(#{select}) IN (#{query.to_sql})"
-  # end
 
  # one_to_many :decendants, read_only: true,
  #   dataset: proc do     
  #   end
 
-  # Need to add version column
-  def branch_dataset(version = nil)
-    connect_table = :branch_relations
-    successor_array = [:successor_id]
-    predecessor_array = [:predecessor_id]
-    cte_table = :branch_decend
-
-    prkey_array = Array(primary_key)
-
-    # Select all columns from this table
-    #c_all = [Sequel::SQL::ColumnAll.new(model.table_name)]
-    select_cols = [:id]
-    
-    # Select this record as the start point of the recursive query
-    # Resulting dataset will include this record
-    base_ds = model.filter(prkey_array.zip(prkey_array.map { |k| send(k) }))
-    
-    # Connect from the working set (cte_table) through the connect_table back to this table
-    recursive_ds = model
-      .join(connect_table, predecessor_array.zip(prkey_array))
-      .join(cte_table, prkey_array.zip(successor_array))
-
-    # SQL::AliasedExpression.new(t, table_alias)).
-    model.from(cte_table)
-      .with_recursive(cte_table,
-                      base_ds.select(select_cols),
-                      recursive_ds.select(select_cols.map { |c| Sequel::SQL::QualifiedIdentifier.new(model.table_name, c) }),
-                      union_all: false)
+  # Return dataset with this and all predecessor branch ids and maximum version number for that branch
+  def decend_dataset(version = nil)
+    self.class.decend_dataset(id, version)
   end
 
-#  def branch_dataset(dataset, version = nil)
-#    #Sequel.or
-#    dataset.filter do |o|
-#      next_branchs = [[self, version]]
-#      all_branchs = []
-#
-#      or_list = []
-#      
-#      until next_branchs.empty?
-#        next_branchs = next_branchs.collect do |branch, ver|
-#          exp = o.&( :branch_id => branch )
-#          exp.args << o.<=( :version, [ver, version].compact.min ) if ver || version
-#          or_list << exp
-#
-#          
-#        end.flatten.compact.uniq
-#      end
-#    end
-#  end
+  def self.decend_dataset(branch_id, version = nil)
+    connect_table = :branch_relations
+    cte_table = :branch_decend
+
+    # Select this record as the start point of the recursive query
+    # Include the version (or null) column used by recursive part
+    base_ds = db[].select(Sequel.as(Sequel.cast(branch_id, :integer), :id),
+                          Sequel.as(0, :depth),
+                          Sequel.as(Sequel.cast(version, :bigint), :version))
+    
+    # Connect from the working set (cte_table) through the connect_table back to this table
+    # Use the least (lowest) version number from the current version or the connect_table version
+    # This ensures the version column on the connect_table locks in all objects at or below that version
+    recursive_ds = db[connect_table]
+      .join(cte_table, [[:id, :successor_id]])
+      .select(Sequel.qualify(connect_table, :predecessor_id),
+              Sequel.+(:depth, 1),
+              Sequel.function(:LEAST, *[connect_table, cte_table].map { |t|
+                                Sequel.qualify(t, :version) }))
+
+    db[cte_table]
+      .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
+  end
+
+  def create_decend_table(version = nil)
+    table_name = "branch_decend_#{id}#{version && "_#{version}"}".to_sym
+    dataset = decend_dataset(version)
+    db.create_table table_name, :temp => true, :as => dataset, :on_commit => self.class.in_context? && :drop
+    table_name
+  end
+  
+
+  @@context_list = []
+
+  def self.in_context?
+    @@context_list.empty? ? nil : true
+  end
+
+
+  def self.current!
+    @@context_list.last
+  end
+
+  def self.current
+    raise "No current context" if @@context_list.empty?
+    current!
+  end
+
+  # Represents Branch Context with a version lock
+  class BranchContext
+    def initialize(branch, version)
+      @branch, @version = branch, version
+    end
+    attr_reader :branch, :version
+
+    def id
+      branch.id
+    end
+
+    def table
+      return @table if @table
+      @table = @branch.create_decend_table(version)
+    end
+
+    def data
+      return @data if @data
+      @data = Branch.db[table].all
+    end
+
+    def contains_branch?(branch)
+      data.find { |h| h[:id] == branch.id }
+    end
+  end
+
+  def context(opts=OPTS, &block)
+    self.class.context(self, opts, &block)
+  end
+
+  def self.context(branch, opts=OPTS)
+    return branch unless block_given?
+    version = opts[:version]
+    version = version.version if version and !version.is_a?(Integer)
+
+    if cur = @@context_list.last
+      unless rec = cur.contains_branch?(branch)
+        raise "Branch #{branch.id} not predicessor of #{cur.branch.id}"
+      end
+      version = [version, rec[:version]].compact.min
+    end
+
+    current = nil
+    begin
+      db.transaction(opts) do
+        current = BranchContext.new(branch, version)
+        @@context_list.push(current)
+        
+        yield branch
+      end
+    ensure
+      if current
+        raise "WTF" if current != @@context_list.last
+        @@context_list.pop
+      end
+    end
+    branch
+  end
 end

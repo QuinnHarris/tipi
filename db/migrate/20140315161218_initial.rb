@@ -1,38 +1,4 @@
 module Sequel
-  module Schema
-    class CreateTableGenerator
-      def version_columns(references = nil, prefix = nil)
-        prefix ||= references
-        keys = [:record_id, :branch_id, :version]
-        columns = keys.collect do |column|
-          "#{prefix && "#{prefix}_"}#{column}".to_sym
-        end
-
-        columns.each do |name|
-          Integer name, null: false, default: (name == :version) ? { :sequence => 'version_seq' } : nil
-        end
-
-        unless prefix
-          primary_key columns
-          # primary key creates index
-        else
-          index columns
-        end
-        
-        # Index by branch
-        index columns[1..2]+columns[0..0], unique: !prefix
-        
-        if references
-          foreign_key columns, references, key: keys
-        else
-          foreign_key [columns[1]], :branches
-        end
-        
-        columns
-      end
-    end
-  end
-
   class Database
     # Ideally this would be submitted to the Sequel project
     def create_sequence_sql(name, options)
@@ -52,62 +18,53 @@ module Sequel
       run(create_sequence_sql(name, options))
     end
 
-    # Monkey patchs to Sequel from database/schema_methods.rb
-
-    # Enable alter_table_op_sql to support sequences on default values
-    # Is there a better way?  Can literal function support unquoted output?
-    alias_method :alter_table_op_sql_orig, :alter_table_op_sql
-    def alter_table_op_sql(table, op)
-      if op[:op] == :set_column_default and op[:default][:sequence]
-        quoted_name = quote_identifier(op[:name]) if op[:name]
-        "ALTER COLUMN #{quoted_name} SET DEFAULT nextval(#{literal(op[:default][:sequence])}::regclass)"
-      else
-        alter_table_op_sql_orig(table, op)
-      end
-    end
-
-    # Copied and modified from original
-    # Add default SQL fragment to column creation SQL.
-    def column_definition_default_sql(sql, column)
-      return unless column.include?(:default)
-      if column[:default].is_a?(Hash) && column[:default].include?(:sequence)
-        sql << " DEFAULT nextval(#{literal(column[:default][:sequence])}::regclass)"
-      else
-        sql << " DEFAULT #{literal(column[:default])}"
-      end
-    end
-
-
     def create_version_table(table_name, options = {}, &block)
       create_table(table_name, options) do
-        version_columns
-        
-        TrueClass       :deleted
+        Bignum :version, null: false, default: Sequel.function(:nextval, 'version_seq')
+        primary_key [:version]
+
+        foreign_key :branch_id, :branches, null: false
+
+        unless options[:no_record]
+          Integer   :record_id, null: false
+
+          refs = [:record_id, :branch_id]
+          
+          index refs
+          index refs.reverse
+        end
+         
+        DateTime    :created_at, null: false
 
         instance_eval(&block)
+
+        # Does moving this to the end improve allocation like in C?
+        TrueClass   :deleted,    null: false, default: false
       end
 
-      # OWNED BY causes Postgres to drop the sequence when the table is dropped
-      sequence_name = "#{table_name}_record_id_seq"
-      create_sequence(sequence_name,
-                      ownedby_table: table_name, ownedby_column: :record_id)
-      set_column_default(table_name, :record_id, sequence: sequence_name)
+      unless options[:no_record]
+        # OWNED BY causes Postgres to drop the sequence when the table is dropped
+        sequence_name = "#{table_name}_record_id_seq"
+        create_sequence(sequence_name,
+                        ownedby_table: table_name, ownedby_column: :record_id)
+        set_column_default(table_name, :record_id, Sequel.function(:nextval, sequence_name))
+      end
     end
   end
 end
 
 Sequel.migration do
-  change do
+  up do
     # Global version sequence
     create_sequence(:version_seq)
 
     # Should the version sequence be global?  Would it be useful, will we overflow it.
     create_table :branches do
       primary_key   :id
-      String        :name
+      String        :name,        null: false
       String        :description, text: true
 
-      DateTime      :created_at
+      DateTime      :created_at,  null: false
       DateTime      :updated_at
     end
 
@@ -119,30 +76,66 @@ Sequel.migration do
       # Index by both successor_id and predecessor_id (primary_key creates index)
       index         [:predecessor_id, :successor_id], unique: true
 
-      Integer       :version
+      BigInt        :version
+
+      check { predecessor_id != successor_id }
     end
+
+    # Use stored proceedure and trigger to test for cycles
+    # This will not detect cycles when two transactions are opened simultaniously that together insert rows causing a cycle
+    run %(
+CREATE FUNCTION cycle_test() RETURNS TRIGGER AS $cycle_test$
+DECLARE
+  cycle_path integer ARRAY;
+BEGIN
+  IF (TG_OP = 'UPDATE' AND
+      NEW.successor_id = OLD.successor_id AND
+      NEW.predecessor_id = OLD.predecessor_id) THEN
+    RETURN NULL;
+  END IF;
+
+  WITH RECURSIVE branch_decend AS (
+      SELECT NEW.successor_id AS id,
+             ARRAY[NEW.predecessor_id, NEW.successor_id] AS path,
+             false AS cycle
+    UNION
+      SELECT branch_relations.successor_id,
+             branch_decend.path || branch_relations.successor_id,
+	     branch_relations.successor_id = ANY(branch_decend.path)
+        FROM branch_relations
+	  INNER JOIN branch_decend
+	    ON branch_relations.predecessor_id = branch_decend.id
+        WHERE NOT branch_decend.cycle
+  ) SELECT path INTO cycle_path
+      FROM branch_decend WHERE cycle LIMIT 1;
+  
+  IF FOUND THEN
+    RAISE EXCEPTION 'cycle found %', cycle_path;
+  END IF;
+
+  RETURN NULL;
+END;
+$cycle_test$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER cycle_test
+  AFTER INSERT OR UPDATE ON branch_relations
+  FOR EACH ROW EXECUTE PROCEDURE cycle_test();
+)
 
     create_version_table :nodes do
       String        :type, null: false
       
       String        :name, null: false
       String        :data, text: true
-
-      DateTime      :created_at
     end
 
-    create_table :edges do
-      columns = %w(from to).collect do |aspect|
-        version_columns :nodes, aspect
-      end.flatten
-      primary_key columns
-
-      TrueClass     :deleted    
-
-      TrueClass     :version_lock
-
-      DateTime      :created_at
-      DateTime      :updated_at
+    create_version_table :edges, no_record: true do
+      [:from, :to].each do |aspect|
+        name = "#{aspect}_version".to_sym
+        Bignum name, null: false
+        foreign_key [name], :nodes
+        index name
+      end
     end
     
 
@@ -195,8 +188,8 @@ Sequel.migration do
 
     create_table :node_instances do
       foreign_key    :user_id, :users
-      columns = version_columns :nodes
-      primary_key    [:user_id] + columns
+      foreign_key    :node_version, :nodes
+      primary_key    [:user_id, :node_version]
 
       String       :state
     end
