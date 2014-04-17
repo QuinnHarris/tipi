@@ -9,7 +9,12 @@
  * compiled file, but it's generally better to create a new file per style scope.
  *
  *= require_self
+ *= require foundation_and_overrides
+
  *= require_tree 
  *= require foundation */
 @import "foundation_and_overrides";
 /* Add imports of custom sass/scss files here */
+header {height:20px; background-color: black}
+#main {color: green;
+background-color: black;}
