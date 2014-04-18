@@ -58,5 +58,7 @@ Tipi::Application.routes.draw do
 
   resources :categories
 
+  resources :creator
+
   devise_for :users  # , :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" }
 end
