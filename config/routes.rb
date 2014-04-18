@@ -56,5 +56,7 @@ Tipi::Application.routes.draw do
 
   root :to => "home#index"
 
+  resources :categories
+
   devise_for :users  # , :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" }
 end
