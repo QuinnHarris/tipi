@@ -1,38 +1,43 @@
 !!! 5
 %html
   %head
-    %title System
+    %meta{ charset: 'utf-8' }
+    %meta{ name: 'viewport', content: "width=device-width, initial-scale=1.0" }
+    %title= content_for?(:title) ? yield(:title) : 'Tipi'
     = stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true
     = javascript_include_tag "application", "data-turbolinks-track" => true
-    = csrf_meta_tags
     = javascript_include_tag "vendor/modernizr"
-    %meta {content: "width=device-width, initial-scale=1.0", name: "viewport"}/
+    = csrf_meta_tags
+
+%body
   %nav.top-bar{"data-topbar" => ""}
     %ul.title-area
       %li.name
         %h1
-          %a{href:"#"} Tipi
+          = link_to 'Tipi', root_path
       %li.toggle-topbar.menu-icon
-        a{href: "#"} Tipi
+        %a{href:"#"}
     %section.top-bar-section
       / Right Nav Section
       %ul.right
-        %li.active
-          %a{href: "#"} Browse
+        %li= link_to 'Create'
+        %li= link_to 'Browse'
         %li.has-dropdown
-          %a{href: "#"} My Tipi
+          = link_to 'My Tipi'
           %ul.dropdown
-            %li
-              %a{href: "#"} My Tipis
-            %li
-              %a{href: "#"} Profile
-            %li
-              %a{href: "#"} Log Out  
+            %li= link_to 'My Tipis'
+            %li= link_to 'Profile'
+            %li= link_to 'Log Out'
       / Left Nav Section
       %ul.left
-        %li
-          %a{href: "#"} Search
-  %body
-    %p.notice= notice
-    %p.alert= alert
-    = yield
+        %li.has-form
+          .row.collapse
+            = form_tag do
+              .large-9.small-9.columns
+                = text_field_tag(:search, nil, placeholder: 'Search Tipis')
+              .large-3.small-3.columns
+                = link_to('Go', nil, class: 'alert button expand')
+
+  %p.notice= notice
+  %p.alert= alert
+  = yield
