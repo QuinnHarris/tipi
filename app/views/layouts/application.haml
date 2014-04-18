@@ -7,6 +7,31 @@
     = csrf_meta_tags
     = javascript_include_tag "vendor/modernizr"
     %meta {content: "width=device-width, initial-scale=1.0", name: "viewport"}/
+  %nav.top-bar{"data-topbar" => ""}
+    %ul.title-area
+      %li.name
+        %h1
+          %a{href:"#"} Tipi
+      %li.toggle-topbar.menu-icon
+        a{href: "#"} Tipi
+    %section.top-bar-section
+      / Right Nav Section
+      %ul.right
+        %li.active
+          %a{href: "#"} Browse
+        %li.has-dropdown
+          %a{href: "#"} My Tipi
+          %ul.dropdown
+            %li
+              %a{href: "#"} My Tipis
+            %li
+              %a{href: "#"} Profile
+            %li
+              %a{href: "#"} Log Out  
+      / Left Nav Section
+      %ul.left
+        %li
+          %a{href: "#"} Search
   %body
     %p.notice= notice
     %p.alert= alert

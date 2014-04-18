@@ -2,10 +2,15 @@
 // They will automatically be included in application.css.
 // You can use Sass (SCSS) here: http://sass-lang.com/
 /* Add imports of custom sass/scss files here */
-header {height:40px;
-background-color: black;
-color: white;
-text-align: center}
-
-#main {color: green;
-background-color: black;}
+.red {
+  height:400px;
+  background-color:red;
+}
+.green {
+  height:400px;
+  background-color:green;
+}
+.blue {
+  height:400px;
+  background-color:blue;
+}

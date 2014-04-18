@@ -1,3 +1,32 @@
 %body
-  %header Tipi
-  %main hello world
+  %nav.top-bar{"data-topbar" => ""}
+    %ul.title-area
+      %li.name
+        %h1
+          %a{href:"#"} Tipi
+      %li.toggle-topbar.menu-icon
+        %a{href:"#"}
+    %section.top-bar-section
+      / Right Nav Section
+      %ul.right
+        %li
+          %a{href: "#"} Create
+        %li
+          %a{href: "#"} Browse
+        %li.has-dropdown
+          %a{href: "#"} My Tipi
+          %ul.dropdown
+            %li
+              %a{href: "#"} My Tipis
+            %li
+              %a{href: "#"} Profile
+            %li
+              %a{href: "#"} Log Out  
+      / Left Nav Section
+      %ul.left
+        %li.has-form
+          .row.collapse
+            .large-9.small-9.columns
+              %input{placeholder: "Search Tipis", type: "text"}/
+            .large-3.small-3.columns
+              %a.alert.button.expand{href: "#"} Go             
