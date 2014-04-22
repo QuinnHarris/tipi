@@ -9,63 +9,34 @@
     = javascript_include_tag "vendor/modernizr"
     = csrf_meta_tags
 
-%body
-  %nav.top-bar{"data-topbar" => ""}
-    %ul.title-area
-      %li.name
-        %h1
-          = link_to 'Tipi', root_path
-      %li.toggle-topbar.menu-icon
-        %a{href:"#"}
-    %section.top-bar-section
-      / Right Nav Section
-      %ul.right
-        %li= link_to 'Create'
-        %li= link_to 'Browse', categories_path
-        %li.has-dropdown
-          = link_to 'My Tipi'
-          %ul.dropdown
-            %li= link_to 'My Tipis'
-            %li= link_to 'Profile'
-            %li= link_to 'Log Out'
-      / Left Nav Section
-      %ul.left
-        %li.has-form
-          .row.collapse
-            = form_tag do
-              .large-9.small-9.columns
-                = text_field_tag(:search, nil, placeholder: 'Search Tipis')
-              .large-3.small-3.columns
-                = link_to('Go', nil, class: 'alert button expand')
+  %body
+    %nav.top-bar{"data-topbar" => ""}
+      %ul.title-area
+        %li.name
+          %h1
+            = link_to 'Tipi', root_path
+        %li.toggle-topbar.menu-icon
+          %a{href:"#"}
+      %section.top-bar-section
+        / Right Nav Section
+        %ul.right
+          %li= link_to 'Create'
+          %li= link_to 'Browse', categories_path
+          %li.has-dropdown
+            = link_to 'My Tipi'
+            %ul.dropdown
+              %li= link_to 'My Tipis'
+              %li= link_to 'Profile'
+              %li= link_to 'Log Out'
+        / Left Nav Section
+        %ul.left
+          %li.has-form
+            .row.collapse
+              = form_tag do
+                .large-9.small-9.columns
+                  = text_field_tag(:search, nil, placeholder: 'Search Tipis')
+                .large-3.small-3.columns
+                  = link_to('Go', nil, class: 'alert button expand')
   
-  = yield  
+    = yield  
   %footer
-    .tipi-footer-bottom
-      .row
-        .medium-4.medium-4.push-8.columns
-          %ul.home-social
-            %li
-              %a hi
-            %li
-              %a facebook
-            %li
-              %a email
-        .medium-8.medium-8.pull-4.columns
-          %a.zurb-logo.regular{href: "http://www.zurb.com"}
-          %ul.zurb-links
-            %li
-              %a{href: "http://zurb.com/about"} About
-            %li
-              %a{href: "http://zurb.com/blog"} Blog
-            %li
-              %a{href: "http://zurb.com/news"}
-                News
-                %span.show-for-medium-up & Events
-            %li
-              %a{href: "http://zurb.com/contact"} Contact
-            %li
-              %a{href: "http://zurb.com/sitemap"} Sitemap
-          %p.copyright © 1998‐2014 ZURB, Inc. All rights reserved.
-      
-  %p.notice= notice
-  %p.alert= alert
