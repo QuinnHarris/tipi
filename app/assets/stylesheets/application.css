@@ -18,3 +18,18 @@
 
 @import "foundation_and_overrides";
 
+.tipi-footer-bottom {
+    background: none repeat scroll 0% 0% #333;
+    padding: 24px 0px 10px;
+    color: #222;
+    font-family: "Helvetica Neue","Helvetica",Helvetica,Arial,sans-serif !important;
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    cursor: default;
+}
+.home-social {
+    display: block;
+    float: right;
+    margin-bottom: 8px;
+}

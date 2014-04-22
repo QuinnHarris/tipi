@@ -49,3 +49,5 @@ gem 'sequel-devise'
 #gem 'omniauth-facebook'
 
 gem 'foundation-rails'
+
+gem 'tzinfo-data', platforms: [:mingw, :mswin]
