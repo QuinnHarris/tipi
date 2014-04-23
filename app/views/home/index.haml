@@ -46,3 +46,21 @@
               %option{value: "more-mile"} more
           .large-3.small-12.columns.expand
             %a.button.expand{href: "#"} Search
+
+      %h2 Coded the ruby on rails way
+      %p In something real the options arrays would probably be pulled from the db in the controller
+      %p Refer to http://guides.rubyonrails.org/form_helpers.html
+      %form.custom
+        .row
+          .large-3.small-12.columns
+            %label Food Type:
+            = select_tag(:type, options_for_select(%w(All Mediterranean Chinese Fast Vegetarian)))
+          .large-3.small-6.columns
+            %label Price Range:
+            - l = (0..6).map { |i| i*5 }
+            = select_tag(:price, options_for_select(l[0..-2].zip(l[1..-1]).map { |a,b| ["$#{a}-$#{b}", "#{a}-#{b}"] } + [['more than $30', 'more']]))
+          .large-3.small-6.columns
+            %label Location:
+            = select_tag(:location, options_for_select(%w(near 2\ miles 5\ miles 25\ miles more).map { |s| /(\d+)?(.+)/ === s; [s,  $1 || $2] }))
+          .large-3.small-12.columns.expand
+            %a.button.expand{href: "#"} Search
