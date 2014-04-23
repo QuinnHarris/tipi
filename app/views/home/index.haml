@@ -1,1 +1,48 @@
-%h1 Home Page
+%strong.show-for-medium-up
+  %ul.large.example-orbit{"data-orbit" => ""}
+    %li
+      %img= image_tag("home_create.jpg")
+      .orbit-caption Create projects utilizing the power of the crowd-sourcing.
+    %li.active
+      %img= image_tag("home_collaborate.jpg")
+      .orbit-caption Delegate steps and import steps from anywhere on the planet
+    %li
+      %img= image_tag('home_smart.jpg')
+      .orbit-caption Learn from the successes and failures of others.
+%section.search
+  .row
+    .small-12.large-10.columns.small-centered
+      %h2 Find a Cool Restaurant!
+      %form.custom
+        .row
+          .large-3.small-12.columns
+            %label
+              Food Type:
+            %select
+              %option{value: "All"} All
+              %option{value: "Mediterranean"} Mediterranean
+              %option{value: "Chinese"} Chinese
+              %option{value: "Fast"} Fast Food
+              %option{value: "Vegetarian"} Vegetarian
+          .large-3.small-6.columns
+            %label
+              Price Range:
+            %select
+              %option{value: "0-5"} $0-$5
+              %option{value: "5-10"} $5-$10
+              %option{value: "10-15"} $10-$15
+              %option{value: "15-20"} $15-$20
+              %option{value: "20-25"} $20-$25
+              %option{value: "25-30"} $25-$30
+              %option{value: "more"} more than $30
+          .large-3.small-6.columns
+            %label
+              Location:
+            %select
+              %option{value: "mile"} near me
+              %option{value: "2-mile"} 2 miles
+              %option{value: "5-mile"} 5 miles
+              %option{value: "25-mile"} 25 miles
+              %option{value: "more-mile"} more
+          .large-3.small-12.columns.expand
+            %a.button.expand{href: "#"} Search
