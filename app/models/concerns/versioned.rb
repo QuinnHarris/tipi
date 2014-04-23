@@ -7,11 +7,13 @@ module Versioned
   included do
     many_to_one :branch
 
+    set_primary_key :version
+
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private
-    def self.dataset_from_branch(branch_dataset)
-      ds = dataset.join(branch_dataset, :id => :branch_id) do |j ,lj, js|
+    def self.dataset_from_branch(branch_context_dataset)
+      ds = dataset.join(branch_context_dataset, :id => :branch_id) do |j ,lj, js|
         Sequel.expr(Sequel.qualify(j, :version) => nil) | (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
       end
         .select(Sequel::SQL::ColumnAll.new(table_name)) { |o|
@@ -25,9 +27,16 @@ module Versioned
     # There is probably a better way
     def self.dataset(branch = nil, version = nil)
       return super() if @in_dataset or (!Branch.in_context? and !branch)
-      return dataset_from_branch(branch.decend_dataset(version)) if branch
       @in_dataset = true
-      ds = dataset_from_branch(Branch.current.table)
+      ds = dataset_from_branch(Branch.get_context_data(branch, version))
+      @in_dataset = nil
+      ds
+    end
+
+    # UBER Kludgy, used by node.rb association
+    def self.raw_dataset
+      @in_dataset = true
+      ds = dataset
       @in_dataset = nil
       ds
     end
@@ -58,9 +67,8 @@ module Versioned
       keep = [:record_id, :branch_id].each_with_object({}) do |column, hash|
         hash[column] = vals.delete(column)
       end
-      keep[:branch_id] = Branch.current.id if Branch.in_context?
-      keep[:branch_id] = vals[:branch].id if vals[:branch]
-      # !!! Need to check if branch is in context, but just fix branch and branch_id handling
+      # !!! Fix branch and branch_id handling
+      keep[:branch_id] = Branch.get_branch(vals[:branch]).id
       [:version, :created_at].each { |column| vals.delete(column) }
       o = self.class.new(vals.merge(new_values), &block)
       o.values.merge!(keep)

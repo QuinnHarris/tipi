@@ -7,59 +7,74 @@ class Node < Sequel::Model
   aspects.zip(aspects.reverse).each do |aspect, opposite|
     many_to_many aspect, join_table: :edges, :class => self, reciprocal: opposite,
                          left_key: "#{aspect}_version".to_sym,
-                         right_key: "#{opposite}_version".to_sym
-    # No timestamps on edges (:before_add
-  end
+                         right_key: "#{opposite}_version".to_sym,
+    :dataset =>
+      (proc do |r|
+         branch_context_data = Branch.get_context_data #(branch, branch_version)
 
-  # Work in progress !!!! IGNORE THIS
-  # Currently returns edge records from this node in the branch
-  # Needs to return associated nodes and be well intergrated into the association for to and from
-  def temp_dataset_from(branch, branch_version = nil)
-    connect_table = :branch_relations
-    cte_table = :branch_accend
+         dataset = r.associated_class.raw_dataset
+         
+         # Assuming this node is the latest in the current branch context
+         # Otherwise we need to establish a new context from this branch version and branch ids
+         ds = dataset.join(Sequel.as(:nodes, :dst),
+                           :record_id => :record_id) do |j, lj|
+           Sequel.qualify(j, :version) <= Sequel.qualify(lj, :version)
+         end
+           .join(r[:join_table], r[:right_key] => :version)
+           .join(Sequel.as(:nodes, :src), :version => r[:left_key])
+           .where(Sequel.qualify(:src, :record_id) => record_id) { |o|
+           Sequel.qualify(:src, :version) <= version } # Neccissary?
+         
+         # Must check to from branch context if there is a version lock
+         tables = [r[:join_table], :nodes, :src]
+         tables.each do |table|
+           ds = ds.join(Sequel.as(branch_context_data, "branch_#{table}"),
+                        :id => Sequel.qualify(table, :branch_id)) do |j, lj|
+             Sequel.expr(Sequel.qualify(j, :version) => nil) | 
+               (Sequel.qualify(table, :version) <= Sequel.qualify(j, :version))
+           end
+         end
+         
+         ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
+                        Sequel.as(Sequel.qualify(r[:join_table], :deleted),
+                                  :join_deleted)) do |o|
+           o.rank.function
+             .over(:partition => Sequel.qualify(:nodes, :record_id),
+                   :order => tables.map do |t|
+                     [Sequel.qualify(:"branch_#{t}", :depth),
+                      Sequel.qualify(t, :version)]
+                   end.flatten)
+         end
+         
+         dataset.from(ds).filter(:rank => 1, :deleted => false, :join_deleted => false).select(*r.associated_class.columns)
+       end)
 
-    temp_table = :branch_dataset
-
-    src = :from
-    dst = :to
-    aspect_list = [src, dst]
-
-    # Opening a branch context will typically create a temporary branch dataset table
-    # Otherwise do this with a non recursive WITH
-    branch_data = branch.decend_dataset(branch_version)
-    db.drop_table? temp_table
-    db.create_table temp_table, :temp => true, :as => branch_data  # :on_commit => c:drop, 
-    branch_data = temp_table # Set branch_data to this table instead of dataset
-
-    # !!! Check if this node is in the branch dataset
-
-    # Src link must reference at or before this node.  If after its for a future version or branch
-    src_branch_data = (branch.id == branch_id) ? branch_data : Branch.decend_dataset(branch_id)
-    
-    # Dst link must reference at or after this node so find all successor branched within the branch dataset
-#    base_ds = Branch.dataset.from(branch_data).where(:id => branch_id)
-
-#    recursive_ds = db[temp_table]
-#      .join(connect_table, [[:successor_id, :id]])
-#      .join(cte_table, [[:id, :predecessor_id]])
-#      .select(Sequel::SQL::ColumnAll.new(temp_table))
-
-#    dst_branch_data = db[cte_table].with_recursive(cte_table, base_ds, recursive_ds)
-    
-    # Somewhat the same as in versioned.rb
-    ds = Edge.dataset
-    aspect_list.zip([src_branch_data, branch_data]).each do |aspect, table|
-      ds = ds.join(Sequel.as(table, aspect),
-                   :id => Sequel.qualify(:edges, "#{aspect}_branch_id")
-                   ) do |j|
-        Sequel.expr(Sequel.qualify(j, :version) => nil) | 
-        (Sequel.qualify(:edges, "#{aspect}_version") <= Sequel.qualify(j, :version))
+    define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
+      context = Branch.get_context(branch, false)
+      
+      unless context.includes?(self)
+        raise "Self branch not in context"
       end
-    end
-    ds = ds.where("#{src}_record_id".to_sym => record_id)
 
-#      .select { |o|
-#      o.rank.function.over(:partition => "#{dst}_record_id", :order => [Sequal.qualify(dst, :depth),  Sequel.qualify(dst, :version).desc]) }
+      unless context.includes?(node)
+        raise "Passed branch not in context"
+      end
+
+      h = { :branch_id => context.branch.id,
+        :"#{aspect}_version" => version,
+        :"#{opposite}_version" => node.version,
+        :created_at => self.class.dataset.current_datetime,
+        :deleted => deleted ? true : false}
+      
+      Edge.dataset.insert(h)
+    end
+
+    define_method "_remove_#{aspect}" do |node, branch = nil|
+      # !!! Must check if the object actually exists
+      send("_add_#{aspect}", node, branch, true)
+    end
+
+    # _remove_ and _remove_all_
   end
 end
 
