@@ -15,6 +15,7 @@
 //= require turbolinks
 //= require foundation
 //= require d3
+//= require dagre
 //= require_tree .
 
 
