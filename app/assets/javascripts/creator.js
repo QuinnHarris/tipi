@@ -22,7 +22,6 @@ $( document ).ready(function() {
 	g.addEdge(null, "lwilson",   "kbacon");
 	
 	var renderer = new dagreD3.Renderer();
-	renderer.edgeTension('linear');
 	renderer.run(g, d3.select('svg g'));
 	
 	var layout = dagreD3.layout()
