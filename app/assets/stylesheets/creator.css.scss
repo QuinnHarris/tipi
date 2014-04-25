@@ -6,24 +6,48 @@
   text-align: center;
 }
 
-svg{
-    overflow: hidden;
-    display: block;
-    margin: auto;
+svg {
+  border: 1px solid #999;
+  overflow: hidden;
+  margin: auto;
+  display:block
+}
+
+text {
+  font-weight: 300;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serf;
+  font-size: 14px;
 }
 
 .node rect {
-    stroke: #333;
-    stroke-width: 1.5px;
-    fill: steelblue;
+  stroke: #333;
+  stroke-width: 2px;
+  fill: #fff;
 }
 
 .edgeLabel rect {
-    fill: black;
+  fill: #fff;
 }
 
-.edgePath {
-    stroke: #333;
-    stroke-width: 1.5px;
-    fill: black;
+.edgePath path {
+  stroke: #333;
+  stroke-width: 1.5px;
+  fill: none;
+}
+
+h1, h2 {
+  color: #333;
+}
+
+textarea {
+  width: 800px;
+}
+
+label {
+  margin-top: 1em;
+  display: block;
+}
+
+.error {
+  color: red;
 }
