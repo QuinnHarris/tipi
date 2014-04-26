@@ -6,5 +6,6 @@ class User < Sequel::Model
          :recoverable, :rememberable, :trackable, :validatable, :confirmable, :lockable #, :omniauthable
 
   # Main View for user
-#  belongs_to :view
+  Node
+  one_to_one :view
 end

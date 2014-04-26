@@ -6,4 +6,7 @@
 #   cities = City.create([{ name: 'Chicago' }, { name: 'Copenhagen' }])
 #   Mayor.create(name: 'Emanuel', city: cities.first)
 
-root = Category.create(name: 'Categories Root')
+Branch
+public_view = View.create(name: 'Public View')
+Node
+root_category = Category.create(name: 'Root Category', branch: public_view)
