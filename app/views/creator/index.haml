@@ -15,6 +15,21 @@
 /dagre-d3 script
 %script{src: "http://d3js.org/d3.v3.min.js"}
 %script{src: "http://cpettitt.github.io/project/dagre-d3/latest/dagre-d3.min.js"}
+%script{src: "http://cpettitt.github.io/project/graphlib-dot/latest/graphlib-dot.min.js"}
+%showdata
+  %form
+    %label{for: "inputGraph"} Input Graph Definition (graphviz standards)
+    %textarea#inputGraph{onkeyup: "tryDraw();", rows: "4", style: "display: block"}
+      digraph {
+      A [label="<div style='padding: 10px;'>A <span style='font-size:32px'>Big</span> <span style='color:red;'>HTML</span> Source!</div>"];
+      C;
+      E [label="A sink"];
+      A -&gt; B -&gt; C;
+      B -&gt; D -&gt; E;
+      C -&gt; E;
+      A -&gt; D [label="<div>A multi-rank <span style='color:blue;'>HTML</span> edge!</div>"];
+      }
+      
 %create.center
   %svg{height: "680", width: "650"}
     %g{transform: "translate(20,20)"}
