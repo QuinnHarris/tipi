@@ -140,7 +140,23 @@ CREATE CONSTRAINT TRIGGER cycle_test
 
       unique fgn_keys + [:deleted]
     end
+
     
+    create_table :categories do
+      primary_key   :id
+      String	    :name, null: false
+    end
+    
+    create_table :category_relations do
+      foreign_key   :parent_id, :categories
+      foreign_key   :child_id, :categories
+      primary_key   [:parent_id, :child_id]
+    end
+
+    create_table :categories_nodes do
+      foreign_key   :category_id, :categories
+      foreign_key   :node_version, :nodes
+    end
 
     create_table :users do
       primary_key :id
