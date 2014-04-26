@@ -11,7 +11,7 @@
 
 == Merge multiple branches into one
 
-  branch_merge = Branch.merge(left, right, name: 'Merge')
+  branch_merge = Branch.merge(branch_left, branch_right, name: 'Merge')
 
 == Changing branch relations after created
 
@@ -101,14 +101,14 @@ Of course any normal operations can be performed on the dataset such as where
 The version of context can be restricted by passing a version (or object with version method)
 
   branch_root.context(version: 21) do
-    Node.all # Only returns objects with version number less than or equal to 21
+    Node.all # Only returns objects with version number less than or equal to 21 in root branch
   end
 
 You can not create new objects in a version restricted context
 
 == Versioned object relations
 
-!!! Not yet implemented, work in progress
+!!! Preliminary implementation
 
 Versioned relations work the same as non versioned relations except like versioned objects, operations must be performed in the context of a branch.
 
@@ -119,7 +119,7 @@ Versioned relations work the same as non versioned relations except like version
     node_a.add_to(node_b)
   end
 
-  node_d = nil
+  node_c = node_d = nil
   branch_right.context do
     node_c = Node.create(name: 'Node C')
     node_a.add_to(node_c)
@@ -130,6 +130,19 @@ Versioned relations work the same as non versioned relations except like version
     node_a.add_to(node_d) # Can add edges to nodes exclusivly in predecessor branches
     node_a.remove_to(node_b) # Can remove edges at any branch to
   end
+
+Like other object the relations are created in a specific branch and only visible within that branch (or successors)
+
+  branch_root.context do
+    puts node_a.to.inspect  # only returns node_b not node_c or node_d in another branch
+  end
+
+  branch_merge.context do
+    puts node_a.to.inspect  # returns node_c and node_d but not node_b as it was removed
+
+    puts node_d.from.inspect # returns node_a.  from is the reciprical of to
+  end
+
 = How branching and versioning works
 
 RTFS

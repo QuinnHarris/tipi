@@ -78,11 +78,11 @@ class Branch < Sequel::Model
  #   end
 
   # Return dataset with this and all predecessor branch ids and maximum version number for that branch
-  def decend_dataset(version = nil)
-    self.class.decend_dataset(id, version)
+  def context_dataset(version = nil)
+    self.class.context_dataset(id, version)
   end
 
-  def self.decend_dataset(branch_id, version = nil)
+  def self.context_dataset(branch_id, version = nil)
     connect_table = :branch_relations
     cte_table = :branch_decend
 
@@ -104,11 +104,13 @@ class Branch < Sequel::Model
 
     db[cte_table]
       .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
+      .select_group(:id, :depth).select_append { max(:version).as(:version) }
   end
 
-  def create_decend_table(version = nil)
+  def create_context_table(version = nil)
     table_name = "branch_decend_#{id}#{version && "_#{version}"}".to_sym
-    dataset = decend_dataset(version)
+    dataset = context_dataset(version)
+    db.drop_table? table_name unless self.class.in_context?
     db.create_table table_name, :temp => true, :as => dataset, :on_commit => self.class.in_context? && :drop
     table_name
   end
@@ -130,6 +132,56 @@ class Branch < Sequel::Model
     current!
   end
 
+  # Get a BranchContext for the specified branch or use the current context
+  # if false is specified for version, raise exception if the context has a version lock
+  # this is needed for anything that modifies the database
+  def self.get_context(branch = nil, version = nil)
+    if branch
+      if in_context? 
+        if !Branch.current!.includes?(branch, version ? version : nil)
+          raise "Branch #{branch.id} not predicessor of #{current!.branch.id}"
+        end
+        if Branch.current!.branch == branch
+          if version == false and Branch.current!.version
+            raise "Version less context required"
+          end
+          return Branch.current
+        end
+      end
+      BranchContext.new(branch, version ? version : nil)
+    else
+      ctx = Branch.current
+      if version == false and ctx.version
+        raise "Version less context required"
+      end
+      ctx
+    end
+  end
+
+  def self.get_context_data(branch = nil, version = nil)
+    if branch
+      if in_context? and !Branch.current.includes?(branch, version)
+        raise "Branch #{branch.id} not predicessor of #{current!.branch.id}"
+      end
+#      branch.context_dataset(version)
+      
+      branch.create_context_table
+    else
+      Branch.current.table
+    end
+  end
+
+  def self.get_branch(branch = nil)
+    if branch
+      if in_context? and !Branch.current.includes?(branch)
+        raise "Branch #{branch.id} not predicessor of #{current!.branch.id}"
+      end
+      branch
+    else
+      Branch.current.branch
+    end
+  end
+
   # Represents Branch Context with a version lock
   class BranchContext
     def initialize(branch, version)
@@ -143,7 +195,7 @@ class Branch < Sequel::Model
 
     def table
       return @table if @table
-      @table = @branch.create_decend_table(version)
+      @table = @branch.create_context_table(version)
     end
 
     def data
@@ -151,8 +203,9 @@ class Branch < Sequel::Model
       @data = Branch.db[table].all
     end
 
-    def contains_branch?(branch)
-      data.find { |h| h[:id] == branch.id }
+    def includes?(branch, version = nil)
+      return true if branch == branch # Avoid loading data if we don't have to
+      data.find { |h| h[:id] == branch.id and (version.nil? or d[:version] >= version) }
     end
   end
 
@@ -165,8 +218,8 @@ class Branch < Sequel::Model
     version = opts[:version]
     version = version.version if version and !version.is_a?(Integer)
 
-    if cur = @@context_list.last
-      unless rec = cur.contains_branch?(branch)
+    if cur = current!
+      unless rec = cur.includes?(branch, version)
         raise "Branch #{branch.id} not predicessor of #{cur.branch.id}"
       end
       version = [version, rec[:version]].compact.min

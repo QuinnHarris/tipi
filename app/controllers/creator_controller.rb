@@ -1,0 +1,2 @@
+class CreatorController < ApplicationController
+end

@@ -1,0 +1,20 @@
+/grid: menu left --title and subtitble and author info-- menu right
+/main creator space:
+///requirements
+///mini map
+.row.center Spacer
+.row.center
+  .small-2.columns.left.grey{:style => "text-align: left"}
+    left menu
+  .small-8.columns.center
+    title
+    subtitle
+    author of project (rating)
+  .small-2.columns.right.grey{:style => "text-align: right"}
+    right menu
+/dagre-d3 script
+%script{src: "http://d3js.org/d3.v3.min.js"}
+%script{src: "http://cpettitt.github.io/project/dagre-d3/latest/dagre-d3.min.js"}
+%create.center
+  %svg{height: "680", width: "650"}
+    %g{transform: "translate(20,20)"}

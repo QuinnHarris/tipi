@@ -1,0 +1,29 @@
+// Place all the styles related to the creator controller here.
+// They will automatically be included in application.css.
+// You can use Sass (SCSS) here: http://sass-lang.com/
+.center{
+  align: center;
+  text-align: center;
+}
+
+svg{
+    overflow: hidden;
+    display: block;
+    margin: auto;
+}
+
+.node rect {
+    stroke: #333;
+    stroke-width: 1.5px;
+    fill: steelblue;
+}
+
+.edgeLabel rect {
+    fill: black;
+}
+
+.edgePath {
+    stroke: #333;
+    stroke-width: 1.5px;
+    fill: black;
+}

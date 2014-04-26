@@ -130,12 +130,15 @@ CREATE CONSTRAINT TRIGGER cycle_test
     end
 
     create_version_table :edges, no_record: true do
-      [:from, :to].each do |aspect|
+      fgn_keys = [:from, :to].map do |aspect|
         name = "#{aspect}_version".to_sym
         Bignum name, null: false
         foreign_key [name], :nodes
         index name
+        name
       end
+
+      unique fgn_keys + [:deleted]
     end
     
 

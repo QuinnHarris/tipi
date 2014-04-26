@@ -1,4 +1,4 @@
-Tipi::Application.routes.draw do
+Rails.application.routes.draw do
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".
 
@@ -55,6 +55,10 @@ Tipi::Application.routes.draw do
   #   end
 
   root :to => "home#index"
+
+  resources :categories
+
+  resources :creator
 
   devise_for :users  # , :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" }
 end
