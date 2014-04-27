@@ -12,6 +12,8 @@
  *
  *= require foundation_and_overrides
  *= require foundation
+ *= require alertify/core
+ *= require alertify/default
  *= require_tree .
  *= require_self
  */

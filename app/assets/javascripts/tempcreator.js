@@ -3,7 +3,7 @@
 */
 
 //initial settings
-var width = 960,
+/*var width = 960,
 	height = 500;
 	
 	//colors
@@ -250,4 +250,4 @@ function tryDraw() {
 	        	}));
 		 }
 	 }
-}
+}*/

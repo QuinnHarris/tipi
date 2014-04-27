@@ -1,0 +1,7 @@
+= link_to 'Back', categories_path
+
+= form_for(@category) do |f|
+  Name:
+  = hidden_field :parent, :version
+  = f.text_field :name
+  .actions= f.submit

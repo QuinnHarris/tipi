@@ -51,3 +51,12 @@ label {
 .error {
   color: red;
 }
+
+#nodes-container {
+  width: 90%;
+  height: 60em;
+  border-size: border-box;
+  border: 1px solid black;
+  cursor: pointer;
+  margin: 1em auto;
+}
