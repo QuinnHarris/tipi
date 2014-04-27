@@ -63,7 +63,7 @@ Rails.application.routes.draw do
     resources :project, only: [] do
       get :nodes
       put :node_new
-      get :edge_change
+      put :edge_change
     end
   end
 
