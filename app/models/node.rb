@@ -107,4 +107,27 @@ class Category < Node
       add_from(child)
     end
   end
+
+  def get_child(name)
+    child = from_dataset.where(type: 'Category', name: name).first
+    return child if child
+    add_child(name: name)
+  end
+
+  def get_path(path)
+    cur = self
+    path.split('/').each do |name|
+      cur = cur.get_child(name)
+    end
+    cur
+  end
+
+  def add_project(name)
+    # Need better way to request specific types
+    project = from_dataset.where(type: 'Project', name: name).first
+    raise "Project Exists: #{name}" if project
+    project = Project.create(name: name)
+    add_from(project)
+    project
+  end
 end
