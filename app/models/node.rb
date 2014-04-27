@@ -98,13 +98,23 @@ class Category < Node
     @@root = dataset(View.public).where(version: 1).first!
   end
 
-  alias_method :children, :from
-  alias_method :parents, :to
+  alias_method :children, :to
+  alias_method :parents, :from
+
+#  def parents
+#    return @parents if @parents
+#    @parents = from_dataset.where(type: 'Category').all
+#  end
+
+  def children_and_projects
+    return @children_and_projects if @children_and_projects
+    @children_and_projects = from_dataset.where(type: %w(Category Project)).all
+  end
 
   def add_child(values)
     self.class.db.transaction do
       child = Category.create(values.merge(:context => context))
-      add_from(child)
+      add_to(child)
     end
   end
 
@@ -127,7 +137,7 @@ class Category < Node
     project = from_dataset.where(type: 'Project', name: name).first
     raise "Project Exists: #{name}" if project
     project = Project.create(name: name)
-    add_from(project)
+    add_to(project)
     project
   end
 end

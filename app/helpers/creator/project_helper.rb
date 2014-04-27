@@ -1,0 +1,2 @@
+module Creator::ProjectHelper
+end

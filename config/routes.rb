@@ -58,7 +58,14 @@ Rails.application.routes.draw do
 
   resources :categories
 
-  resources :creator
+  namespace :creator do
+    get :index
+    resources :project, only: [] do
+      get :nodes
+      put :node_new
+      get :edge_change
+    end
+  end
 
   devise_for :users  # , :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" }
 end

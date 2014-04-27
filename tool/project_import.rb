@@ -63,11 +63,10 @@ View.public.context do
   node_map = {}
   data['nodes'].each do |node_h|
     id, name = %w(id name).map do |k|
-      v = node_h[k]
-      raise "No #{k} attribute in #{node_h.inspect} for nodes" unless v
-      v
+      node_h[k].tap { |v|
+        raise "No #{k} attribute in #{node_h.inspect} for nodes" unless v }
     end
-    raise "Duplicate ID: #{id}" if node_map.has_key?(id)
+    raise "Duplicate node ID: #{id}" if node_map.has_key?(id)
     node_map[id] = Node.create(name: name)
   end
 
@@ -76,9 +75,8 @@ View.public.context do
     from, to = %w(from to).map do |k|
       v = edge_h[k]
       raise "No #{k} attribute in #{edge_h.inspect} for edges" unless v
-      n = node_map[v]
-      raise "No associated node #{v} for #{k} attribute in #{edge_h.inspect} for edges" unless n
-      n
+      node_map[v].tap { |n|
+        raise "No associated node #{v} for #{k} attribute in #{edge_h.inspect} for edges" unless n }
     end
     from.add_to(to)
     has_to << to
