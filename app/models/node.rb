@@ -8,9 +8,11 @@ class Node < Sequel::Model
     many_to_many aspect, join_table: :edges, :class => self, reciprocal: opposite,
                          left_key: "#{aspect}_version".to_sym,
                          right_key: "#{opposite}_version".to_sym,
+    :select => nil, # Don't override our select statements
     :dataset =>
       (proc do |r|
-         branch_context_data = Branch.get_context_data #(branch, branch_version)
+         ctx = Branch.get_context(context)
+         branch_context_data = ctx.dataset
 
          dataset = r.associated_class.raw_dataset
          
@@ -42,25 +44,27 @@ class Node < Sequel::Model
              .over(:partition => Sequel.qualify(:nodes, :record_id),
                    :order => tables.map do |t|
                      [Sequel.qualify(:"branch_#{t}", :depth),
-                      Sequel.qualify(t, :version)]
+                      Sequel.qualify(t, :version).desc]
                    end.flatten)
          end
          
-         dataset.from(ds).filter(:rank => 1, :deleted => false, :join_deleted => false).select(*r.associated_class.columns)
+         ds = dataset.from(ds).filter(:rank => 1, :deleted => false, :join_deleted => false).select(*r.associated_class.columns)
+         ds.send("context=" ,ctx)
+         ds
        end)
 
     define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
-      context = Branch.get_context(branch, false)
+      ctx = Branch.get_context(branch || context, false)
       
-      unless context.includes?(self)
+      unless ctx.includes?(self)
         raise "Self branch not in context"
       end
 
-      unless context.includes?(node)
+      unless ctx.includes?(node)
         raise "Passed branch not in context"
       end
 
-      h = { :branch_id => context.branch.id,
+      h = { :branch_id => ctx.branch.id,
         :"#{aspect}_version" => version,
         :"#{opposite}_version" => node.version,
         :created_at => self.class.dataset.current_datetime,
@@ -84,4 +88,23 @@ end
 
 class Step < Node
 
+end
+
+# Categories can only be contained by other categories
+class Category < Node
+  def self.root
+    # Must duplicate for each call so the BranchContext isn't cached
+#    return @@root.dup if class_variable_defined?('@@root')
+    @@root = dataset(View.public).where(version: 1).first!
+  end
+
+  alias_method :children, :from
+  alias_method :parents, :to
+
+  def add_child(values)
+    self.class.db.transaction do
+      child = Category.create(values.merge(:context => context))
+      add_from(child)
+    end
+  end
 end
