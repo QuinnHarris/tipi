@@ -1,117 +1,100 @@
-# encoding: UTF-8
-# This file is auto-generated from the current state of the database. Instead
-# of editing this file, please use the migrations feature of Active Record to
-# incrementally modify your database, and then regenerate this schema definition.
-#
-# Note that this schema.rb definition is the authoritative source for your
-# database schema. If you need to create the application database on another
-# system, you should be using db:schema:load, not running all the migrations
-# from scratch. The latter is a flawed and unsustainable approach (the more migrations
-# you'll amass, the slower it'll run and the greater likelihood for issues).
-#
-# It's strongly recommended that you check this file into your version control system.
-
-ActiveRecord::Schema.define(version: 20140315161218) do
-
-  # These are extensions that must be enabled in order to support this database
-  enable_extension "plpgsql"
-
-  create_table "branch_relations", force: true do |t|
-    t.integer "predecessor_id"
-    t.integer "successor_id"
-    t.integer "version"
+Sequel.migration do
+  change do
+    create_table(:branches) do
+      primary_key :id
+      column :type, "text", :null=>false
+      column :name, "text", :null=>false
+      column :description, "text"
+      column :created_at, "timestamp without time zone", :null=>false
+      column :updated_at, "timestamp without time zone"
+    end
+    
+    create_table(:schema_migrations) do
+      column :filename, "text", :null=>false
+      
+      primary_key [:filename]
+    end
+    
+    create_table(:branch_relations) do
+      foreign_key :predecessor_id, :branches, :null=>false, :key=>[:id]
+      foreign_key :successor_id, :branches, :null=>false, :key=>[:id]
+      column :version, "bigint"
+      
+      primary_key [:predecessor_id, :successor_id]
+      
+      index [:predecessor_id, :successor_id], :unique=>true
+    end
+    
+    create_table(:nodes) do
+      primary_key :version, :type=>"bigint"
+      foreign_key :branch_id, :branches, :null=>false, :key=>[:id]
+      column :record_id, "integer", :default=>Sequel::LiteralString.new("nextval('nodes_record_id_seq'::regclass)"), :null=>false
+      column :created_at, "timestamp without time zone", :null=>false
+      column :type, "text", :null=>false
+      column :name, "text", :null=>false
+      column :data, "text"
+      column :deleted, "boolean", :default=>false, :null=>false
+      
+      index [:branch_id, :record_id]
+      index [:record_id, :branch_id]
+    end
+    
+    create_table(:users) do
+      primary_key :id
+      foreign_key :branch_id, :branches, :key=>[:id]
+      column :email, "text", :default=>"", :null=>false
+      column :encrypted_password, "text", :default=>"", :null=>false
+      column :reset_password_token, "text"
+      column :reset_password_sent_at, "timestamp without time zone"
+      column :remember_created_at, "timestamp without time zone"
+      column :sign_in_count, "integer", :default=>0, :null=>false
+      column :current_sign_in_at, "timestamp without time zone"
+      column :last_sign_in_at, "timestamp without time zone"
+      column :current_sign_in_ip, "text"
+      column :last_sign_in_ip, "text"
+      column :confirmation_token, "text"
+      column :confirmed_at, "timestamp without time zone"
+      column :confirmation_sent_at, "timestamp without time zone"
+      column :unconfirmed_email, "text"
+      column :failed_attempts, "integer", :default=>0, :null=>false
+      column :unlock_token, "text"
+      column :locked_at, "timestamp without time zone"
+      column :provider, "text"
+      column :uid, "text"
+      column :name, "text"
+      column :created_at, "timestamp without time zone"
+      column :updated_at, "timestamp without time zone"
+      
+      index [:confirmation_token], :unique=>true
+      index [:email], :unique=>true
+      index [:reset_password_token], :unique=>true
+      index [:unlock_token], :unique=>true
+    end
+    
+    create_table(:edges) do
+      primary_key :version, :type=>"bigint"
+      foreign_key :branch_id, :branches, :null=>false, :key=>[:id]
+      column :created_at, "timestamp without time zone", :null=>false
+      foreign_key :from_version, :nodes, :type=>"bigint", :null=>false, :key=>[:version]
+      foreign_key :to_version, :nodes, :type=>"bigint", :null=>false, :key=>[:version]
+      column :deleted, "boolean", :default=>false, :null=>false
+      
+      index [:from_version]
+      index [:from_version, :to_version, :deleted], :name=>:edges_from_version_to_version_deleted_key, :unique=>true
+      index [:to_version]
+    end
+    
+    create_table(:node_instances) do
+      foreign_key :user_id, :users, :null=>false, :key=>[:id]
+      foreign_key :node_version, :nodes, :null=>false, :key=>[:version]
+      column :state, "text"
+      
+      primary_key [:user_id, :node_version]
+    end
   end
-
-  add_index "branch_relations", ["predecessor_id", "successor_id"], name: "index_branch_relations_on_predecessor_id_and_successor_id", unique: true, using: :btree
-
-  create_table "branches", force: true do |t|
-    t.string   "name"
-    t.text     "description"
-    t.datetime "created_at"
-    t.datetime "updated_at"
+end
+Sequel.migration do
+  change do
+    self << "INSERT INTO \"schema_migrations\" (\"filename\") VALUES ('20140315161218_initial.rb')"
   end
-
-  create_table "edges", force: true do |t|
-    t.integer  "from_record_id", null: false
-    t.integer  "from_branch_id", null: false
-    t.integer  "from_version",   null: false
-    t.integer  "to_record_id",   null: false
-    t.integer  "to_branch_id",   null: false
-    t.integer  "to_version",     null: false
-    t.boolean  "deleted"
-    t.boolean  "version_lock"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "edges", ["from_branch_id", "from_version", "from_record_id"], name: "index_edges_on_from_branch_id_version_record_id", unique: true, using: :btree
-  add_index "edges", ["from_record_id", "from_branch_id", "from_version"], name: "index_edges_on_from_record_id_branch_id_version", unique: true, using: :btree
-  add_index "edges", ["to_branch_id", "to_version", "to_record_id"], name: "index_edges_on_to_branch_id_version_record_id", unique: true, using: :btree
-  add_index "edges", ["to_record_id", "to_branch_id", "to_version"], name: "index_edges_on_to_record_id_branch_id_version", unique: true, using: :btree
-
-  create_table "node_instances", force: true do |t|
-    t.integer "user_id"
-    t.integer "node_id"
-    t.string  "state"
-  end
-
-  create_table "nodes", force: true do |t|
-    t.integer "record_id", null: false
-    t.integer "branch_id", null: false
-    t.integer "version",   null: false
-    t.boolean "deleted"
-    t.string  "type",      null: false
-    t.string  "name",      null: false
-    t.text    "data"
-  end
-
-  add_index "nodes", ["branch_id", "version", "record_id"], name: "index_nodes_on_branch_id_version_record_id", unique: true, using: :btree
-  add_index "nodes", ["record_id", "branch_id", "version"], name: "index_nodes_on_record_id_branch_id_version", unique: true, using: :btree
-
-  create_table "users", force: true do |t|
-    t.integer  "branch_id"
-    t.string   "email",                  default: "", null: false
-    t.string   "encrypted_password",     default: "", null: false
-    t.string   "reset_password_token"
-    t.datetime "reset_password_sent_at"
-    t.datetime "remember_created_at"
-    t.integer  "sign_in_count",          default: 0,  null: false
-    t.datetime "current_sign_in_at"
-    t.datetime "last_sign_in_at"
-    t.string   "current_sign_in_ip"
-    t.string   "last_sign_in_ip"
-    t.string   "confirmation_token"
-    t.datetime "confirmed_at"
-    t.datetime "confirmation_sent_at"
-    t.string   "unconfirmed_email"
-    t.integer  "failed_attempts",        default: 0,  null: false
-    t.string   "unlock_token"
-    t.datetime "locked_at"
-    t.string   "provider"
-    t.string   "uid"
-    t.string   "name"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "users", ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true, using: :btree
-  add_index "users", ["email"], name: "index_users_on_email", unique: true, using: :btree
-  add_index "users", ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true, using: :btree
-  add_index "users", ["unlock_token"], name: "index_users_on_unlock_token", unique: true, using: :btree
-
-  add_foreign_key "branch_relations", "branches", name: "branch_relations_predecessor_id_fk", column: "predecessor_id"
-  add_foreign_key "branch_relations", "branches", name: "branch_relations_successor_id_fk", column: "successor_id"
-
-  add_foreign_key "edges", "branches", name: "edges_from_branch_id_fk", column: "from_branch_id"
-  add_foreign_key "edges", "branches", name: "edges_to_branch_id_fk", column: "to_branch_id"
-  add_foreign_key "edges", "nodes", name: "edges_from_record_id_branch_id_version_fk", column: "from_record_id", primary_key: "record_id"
-  add_foreign_key "edges", "nodes", name: "edges_to_record_id_branch_id_version_fk", column: "to_record_id", primary_key: "record_id"
-
-  add_foreign_key "node_instances", "nodes", name: "node_instances_node_id_fk"
-  add_foreign_key "node_instances", "users", name: "node_instances_user_id_fk"
-
-  add_foreign_key "nodes", "branches", name: "nodes_branch_id_fk"
-
-  add_foreign_key "users", "branches", name: "users_branch_id_fk"
-
 end

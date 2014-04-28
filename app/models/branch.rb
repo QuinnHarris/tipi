@@ -162,7 +162,7 @@ class Branch < Sequel::Model
 
     db[cte_table]
       .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
-      .select_group(:id, :depth).select_append { max(:version).as(:version) }
+      .select_group(:id, :depth).select_append { min(:version).as(:version) }
   end
 
   def create_context_table(version = nil)

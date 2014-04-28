@@ -68,7 +68,8 @@ module Versioned
         Sequel.expr(Sequel.qualify(j, :version) => nil) | (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
       end
         .select(Sequel::SQL::ColumnAll.new(table_name)) { |o|
-          o.rank.function.over(:partition => o.record_id, :order => [o.depth,  Sequel.qualify(table_name, :version).desc]) }
+          o.rank.function.over(:partition => o.record_id,
+                               :order => [o.depth,  Sequel.qualify(table_name, :version).desc]) }
 
       # User original dataset if single table inheritance is used
       ds = (@sti_dataset || raw_dataset).from(ds).filter(:rank => 1)
