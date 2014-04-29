@@ -1,16 +1,12 @@
 // Place all the styles related to the creator controller here.
 // They will automatically be included in application.css.
 // You can use Sass (SCSS) here: http://sass-lang.com/
-.center{
-  align: center;
-  text-align: center;
-}
-
 svg {
   border: 1px solid #999;
   overflow: hidden;
   margin: auto;
-  display:block
+  display:block;
+  cursor: crosshair;
 }
 
 text {
@@ -57,6 +53,6 @@ label {
   height: 60em;
   border-size: border-box;
   border: 1px solid black;
-  cursor: pointer;
   margin: 1em auto;
+  cursor: crosshair;
 }
