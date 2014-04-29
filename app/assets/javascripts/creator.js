@@ -108,12 +108,18 @@ $(document).ready(function(){
 	$(document).on("click", function (e){
 		e.preventDefault();
 	});
+	var overrideLable = window.addLable;
+	window.addLable = function(node, root, marginX, marginY){
+		overrideLable();
+	};
 });
 
 $(document).on('click', '#toggle-direction', toggleOrientation);
 
 $(document).on('click', '#load-project', loadProject);
 
+$(document).on('mousedown', '.node', loadProject);
+	
 
 
 
