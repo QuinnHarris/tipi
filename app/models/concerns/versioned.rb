@@ -1,5 +1,4 @@
-#class ExistingVersion < ActiveRecord::ActiveRecordError
-#end
+class VersionedObjectError < StandardError; end
 
 module DatasetBranchContext
   attr_reader :context
@@ -126,7 +125,7 @@ module Versioned
       end
 
       if current
-        raise "Can't add records with version lock" if current.version
+        raise VersionedObjectError, "Can't add object in context with version lock" if current.version
         
         if br = (values[:branch] || values[:branch_id])
           current.not_included!(br)

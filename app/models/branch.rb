@@ -1,3 +1,5 @@
+class SubContextError < StandardError; end
+
 # Represents Branch Context with a version lock
 class BranchContext
   def initialize(branch, version = nil)
@@ -47,37 +49,24 @@ class BranchContext
   end
   public
 
-  def includes?(ctx)
-    sub_id, sub_version = id_ver(ctx)
-    # Avoid loading data if we don't have to
-    if id == sub_id
-      return version.nil? || (sub_version && sub_version <= version)
-    end
-    data.find do |h| 
-      h[:id] == sub_id &&
-        (h[:version].nil? || (sub_version && sub_version <= h[:version]))
-    end
-  end
-
   def not_included!(ctx)
     sub_id, sub_version = id_ver(ctx)
     # Avoid loading data if we don't have to
     if id == sub_id
       return if version.nil?
       unless sub_version && sub_version <= version
-        raise "SubContext not included: Branches match (#{id}: #{name}) but #{version} > #{sub_version}" 
+        raise SubContextError, "Branches match (#{id}) but #{version} > #{sub_version}" 
       end
     end
     hash = data.find { |h| h[:id] == sub_id }
     unless hash
-      raise "SubContext not included: Could not find branch match for #{sub_id}"
+      raise SubContextError, "Could not find branch match for #{sub_id}"
     end
 
     return if hash[:version].nil?
     unless sub_version && sub_version <= hash[:version]
-      raise "SubContext not included: Branch found (#{sub_id}: #{hash[:name]}) but #{hash[:version]} > #{sub_version}"
+      raise SubContextError, "Branch found (#{sub_id}: #{hash[:name]}) but #{hash[:version]} > #{sub_version}"
     end
-    hash
   end
 end
 
@@ -260,24 +249,18 @@ class Branch < Sequel::Model
     version = opts[:version]
     version = version.version if version and !version.is_a?(Integer)
 
-    if cur = current!
-      unless rec = cur.not_included!(BranchContext.new(branch, version))
-        raise "Branch #{branch.id} not predicessor of #{cur.branch.id}"
-      end
-      version = [version, rec[:version]].compact.min
-    end
+    cur = BranchContext.new(branch, version)
+    current!.not_included!(cur) if current!
 
-    current = nil
     begin
       db.transaction(opts) do
-        current = BranchContext.new(branch, version)
-        @@context_list.push(current)
+        @@context_list.push(cur)
         
         yield branch
       end
     ensure
       if current
-        raise "WTF" if current != @@context_list.last
+        raise "WTF" if cur != @@context_list.last
         @@context_list.pop
       end
     end
