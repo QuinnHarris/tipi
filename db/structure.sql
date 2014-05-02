@@ -90,6 +90,7 @@ CREATE TABLE branches (
     type text NOT NULL,
     name text NOT NULL,
     description text,
+    precedence integer DEFAULT 0 NOT NULL,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone
 );
@@ -134,8 +135,10 @@ CREATE TABLE edges (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     branch_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
-    from_version bigint NOT NULL,
-    to_version bigint NOT NULL,
+    from_branch_id integer NOT NULL,
+    from_record_id integer NOT NULL,
+    to_branch_id integer NOT NULL,
+    to_record_id integer NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -284,11 +287,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edges_from_version_to_version_deleted_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_branch_id_from_record_id_to_branch_id_to_record__key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_version_to_version_deleted_key UNIQUE (from_version, to_version, deleted);
+    ADD CONSTRAINT edges_from_branch_id_from_record_id_to_branch_id_to_record__key UNIQUE (from_branch_id, from_record_id, to_branch_id, to_record_id, deleted);
 
 
 --
@@ -339,17 +342,17 @@ CREATE UNIQUE INDEX branch_relations_predecessor_id_successor_id_index ON branch
 
 
 --
--- Name: edges_from_version_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_branch_id_from_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX edges_from_version_index ON edges USING btree (from_version);
+CREATE INDEX edges_from_branch_id_from_record_id_index ON edges USING btree (from_branch_id, from_record_id);
 
 
 --
--- Name: edges_to_version_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_to_branch_id_to_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX edges_to_version_index ON edges USING btree (to_version);
+CREATE INDEX edges_to_branch_id_to_record_id_index ON edges USING btree (to_branch_id, to_record_id);
 
 
 --
@@ -426,19 +429,19 @@ ALTER TABLE ONLY edges
 
 
 --
--- Name: edges_from_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: edges_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_version_fkey FOREIGN KEY (from_version) REFERENCES nodes(version);
+    ADD CONSTRAINT edges_from_branch_id_fkey FOREIGN KEY (from_branch_id) REFERENCES branches(id);
 
 
 --
--- Name: edges_to_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: edges_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_to_version_fkey FOREIGN KEY (to_version) REFERENCES nodes(version);
+    ADD CONSTRAINT edges_to_branch_id_fkey FOREIGN KEY (to_branch_id) REFERENCES branches(id);
 
 
 --

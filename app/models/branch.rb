@@ -163,28 +163,42 @@ class Branch < Sequel::Model
 
     # Select this record as the start point of the recursive query
     # Include the version (or null) column used by recursive part
-    base_ds = db[].select(Sequel.as(Sequel.cast(branch_id, :integer), :id),
-                          Sequel.as(name, :name),
-                          Sequel.as(Sequel.cast(nil, :integer), :successor_id),
-                          Sequel.as(Sequel.cast(version, :bigint), :version),
-                          Sequel.as(0, :depth) )
+    base_ds = db[].select(Sequel.cast(branch_id, :integer).as(             :branch_id),
+                          Sequel.as(name,                                  :name),
+                          Sequel.cast(version, :bigint).as(                :version),
+                          Sequel.as(0,                                     :depth),
+                          Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_points) )
     
     # Connect from the working set (cte_table) through the connect_table back to this table
     # Use the least (lowest) version number from the current version or the connect_table version
     # This ensures the version column on the connect_table locks in all objects at or below that version
-    recursive_ds = db[connect_table]
-      .join(cte_table, [[:id, :successor_id]])
-      .select(Sequel.qualify(connect_table, :predecessor_id),
-              Sequel.qualify(cte_table, :name),
-              Sequel.qualify(connect_table, :successor_id),
-              Sequel.function(:LEAST, *[connect_table, cte_table].map { |t|
-                                Sequel.qualify(t, :version) }),
-              Sequel.+(:depth, 1)
-              )
-
-    db[cte_table]
+    recursive_ds =
+      db.from(
+              db.from(connect_table)
+                .join(cte_table, [[:branch_id, :successor_id]])
+                .select(Sequel.qualify(connect_table, :predecessor_id).as(  :branch_id),
+                        Sequel.qualify(cte_table, :name).as(                :name),
+                        Sequel.function(:LEAST, *[connect_table, cte_table].map { |t|
+                                          Sequel.qualify(t, :version) }).as(:version),
+                        Sequel.+(:depth, 1).as(                             :depth),
+                                                                            :branch_points,
+                        Sequel.function(:count).*
+                          .over(:partition => :successor_id).as(            :count)
+                        ) )
+      .select(:branch_id, :name, :version, :depth,
+              Sequel.case([[Sequel.expr(:count) > 1,
+                            Sequel.function(:array_append,
+                                            :branch_points,
+                                            :branch_id)]],
+                          :branch_points) )
+              
+    
+    inner_ds = db[cte_table]
       .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
-#      .select_group(:id, :depth).select_append { min(:version).as(:version) }
+
+    
+    
+
   end
 
   def create_context_table(version = nil)

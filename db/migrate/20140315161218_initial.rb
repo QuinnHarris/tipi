@@ -65,6 +65,8 @@ Sequel.migration do
       String        :name,        null: false
       String        :description, text: true
 
+      Integer       :precedence,  null: false, default: 0
+
       DateTime      :created_at,  null: false
       DateTime      :updated_at
     end
@@ -132,12 +134,14 @@ CREATE CONSTRAINT TRIGGER cycle_test
 
     create_version_table :edges, no_record: true do
       fgn_keys = [:from, :to].map do |aspect|
-        name = "#{aspect}_version".to_sym
-        Bignum name, null: false
-        foreign_key [name], :nodes
-        index name
-        name
-      end
+        branch, record = %w(branch record).map { |n| :"#{aspect}_#{n}_id" }
+        foreign_key branch, :branches, null: false
+        #foreign_key record, :nodes, key: :record_id
+        # must be in set of record_ids on nodes but record_ids is not unique
+        Integer record, null: false
+        index [branch, record]
+        [branch, record]
+      end.flatten
 
       unique fgn_keys + [:deleted]
     end
