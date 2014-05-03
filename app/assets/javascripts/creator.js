@@ -24,27 +24,12 @@ var orientation = "vertical";
 function render(){renderer.layout(layout).run(graph, d3.select("svg g"));}
 
 //getData (ajax)
-var pathUrl = "/app/assets/javascripts/data.json";
+var pathUrl = "localhost:3000/creator/" + projectName + "/" + projectVersion + "/" + data + ".json";
+
 var data;
 function getData(){
 	$.getJSON(pathUrl, function( data ) {
-		for (node in data.nodes) {
-  			var inIcon = "src = 'http://i.stack.imgur.com/BUlXq.png'";
-			var projectIcon = "src = 'http://www.endlessicons.com/wp-content/uploads/2013/02/wrench-icon-614x460.png'";
-			var outIcon = "src = 'https://cdn2.iconfinder.com/data/icons/large-glossy-svg-icons/512/logout_user_login_account-512.png'";
-			var title = this.value;
-			var id = this.id;
-			var subtitle ="Subtitle";
-			var format = ["<div class = 'node-outer'><img class = 'node-in' id = ",
-							id, 
-							inIcon, "><img class = 'node-icon' ", 
-							projectIcon, "><div class = 'node-title-area'><div class = 'node-title'>",
-							title,"</div><div class = 'node-subtitle'>",
-							subtitle,"</div></div><img class = 'node-out' id = ",
-							id,
-							outIcon,"></div>"].join('\n');
-			this.value = format;
-  		};
+  		console.log(data);
   		graph = dagreD3.json(data.nodes,data.edges);
 	});
 }
@@ -65,8 +50,12 @@ function sendData(){
   	});
 }
   
-	function newNode(){}
-	function newEdge(){}
+	function newNode(name){
+		
+	}
+	function newEdge(to, from){
+		
+	}
 //mouse events
 $(document).ready(function(){
 	$(document).on("click", function (e){
@@ -79,7 +68,7 @@ $(document).ready(function(){
 
 //keyboard events
 
-
+function keydown(){}
 //other dom interaction
 function toggleOrientation(){
 	if (orientation == "vertical"){
@@ -191,25 +180,11 @@ $(document).on('mousedown', '.node', mousedown);
 function getData(){
 	
 }
-function updateData(){
-	$.ajax({
-  		type: "POST",
- 	 	url: "localhost:3000/creator/" + projectName + "/" + projectVersion + "/" + data + ".json",
-  		data: data,
-  		dataType: "json"
-	})
-  	.done(function( msg ) {
-    	alert( "Data Saved: " + msg );
-  	});
-}
-function startDragLine(){
-	
-};
+
 $(document).on('mousedown', '.node-out', function(e){
 	var target = mousedownNode = e.target.id;
 	startDragLine(target);
 	x1 = 
 });
 
-function keydown(){}
 */

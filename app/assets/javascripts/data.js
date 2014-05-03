@@ -1,4 +1,4 @@
-var data = {'nodes': [
+return {'nodes': [
 	 {'id':  0, 'value': 'Start'},
 	 {'id':  1, 'value': 'Mount Propellers' },
 	 {'id':  2, 'value': 'Frame'},
