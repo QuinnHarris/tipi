@@ -1,4 +1,4 @@
-{'nodes': [
+var data = {'nodes': [
 	 {'id':  0, 'value': 'Start'},
 	 {'id':  1, 'value': 'Mount Propellers' },
 	 {'id':  2, 'value': 'Frame'},
@@ -38,4 +38,4 @@
 	 {'id': null, 'u': 11, 'v': 13},
 	 {'id': null, 'u': 12, 'v': 13},
 	 {'id': null, 'u': 13, 'v': 14}
-]}
+]};

@@ -15,24 +15,25 @@ function initSvg(){
 		}
 
 //initialize Dagre Renderer (dagre)
-var graph = new dagreD3.Digraph();
-var renderer = new dagreD3.Renderer();
-var layout = new dagreD3.layout();
+var graph = new dagreD3.Digraph;
+var renderer = new dagreD3.Renderer;
+var layout = new dagreD3.layout;
 
 layout = layout.nodeSep(20).rankSep(20);
 var orientation = "vertical";
-function render(){renderer.layout(layout).run(g, d3.select("svg g"));}
+function render(){renderer.layout(layout).run(graph, d3.select("svg g"));}
 
 //getData (ajax)
+var pathUrl = "/app/assets/javascripts/data.json";
 var data;
 function getData(){
-	graph = new dagreD3.Digraph; //reset the digraph
-	$.getJSON("/app/assets/javascripts/data.json", function( data ) {
-		$.each( data.nodes, function( id, name ) {
+	$.getJSON(pathUrl, function( data ) {
+		for (node in data.nodes) {
   			var inIcon = "src = 'http://i.stack.imgur.com/BUlXq.png'";
 			var projectIcon = "src = 'http://www.endlessicons.com/wp-content/uploads/2013/02/wrench-icon-614x460.png'";
 			var outIcon = "src = 'https://cdn2.iconfinder.com/data/icons/large-glossy-svg-icons/512/logout_user_login_account-512.png'";
-			var title = name;
+			var title = this.value;
+			var id = this.id;
 			var subtitle ="Subtitle";
 			var format = ["<div class = 'node-outer'><img class = 'node-in' id = ",
 							id, 
@@ -43,27 +44,29 @@ function getData(){
 							id,
 							outIcon,"></div>"].join('\n');
 			this.value = format;
-  		});
-  		graph.json(data.nodes,data.edges);
+  		};
+  		graph = dagreD3.json(data.nodes,data.edges);
 	});
 }
 //sendData (ajax)
-	$.ajax({
-		type: PUSH,
-  		url: "localhost:3000/creator/" + projectName + "/" + projectVersion + "/" + data + ".json",
-  		dataType: "json",
-  		context: document.body,
-	}).done(function() {
-	  	$( this ).addClass( "done" );
-	});
-//updateSvg (Dagre/graphlib)
-
-//updateData (Graphlib)
-
-//appendNode 
-
-//appendEdges
-
+function sendData(){
+	graph.
+  	$.ajax({
+        type: "POST",
+        url: pathUrl,
+        data: markers,
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        success: function(data){
+        	alert(data);
+        },failure: function(errMsg) {
+            alert(errMsg);
+        }
+  	});
+}
+  
+	function newNode(){}
+	function newEdge(){}
 //mouse events
 $(document).ready(function(){
 	$(document).on("click", function (e){
@@ -72,10 +75,12 @@ $(document).ready(function(){
 	initSvg();
 });
 
+// in mousedown
+
 //keyboard events
 
 
-//other events
+//other dom interaction
 function toggleOrientation(){
 	if (orientation == "vertical"){
 		layout = layout.rankDir("LR");
