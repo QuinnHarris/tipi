@@ -97,7 +97,7 @@ module Versioned
 
     private
     def check_context_specifier(values)
-      len = %i[context branch branch_id].find_all { |i| values[i] }.compact.length
+      len = [:context, :branch, :branch_id].find_all { |i| values[i] }.compact.length
       if len > 1
         raise "Only specify one context, branch or branch_id"
       end
