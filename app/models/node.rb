@@ -56,13 +56,8 @@ class Node < Sequel::Model
     define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
       ctx = Branch.get_context(branch || context, false)
       
-      unless ctx.includes?(self)
-        raise "Self branch not in context"
-      end
-
-      unless ctx.includes?(node)
-        raise "Passed branch not in context"
-      end
+      ctx.not_included!(self)
+      ctx.not_included!(node)
 
       h = { :branch_id => ctx.branch.id,
         :"#{aspect}_version" => version,

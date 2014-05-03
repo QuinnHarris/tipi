@@ -7,9 +7,9 @@ default: &default
   adapter: postgresql
   pool: 5
   timeout: 5000
-  username: tipi
-  password: tipi
-  host: exoserv
+  username:
+  password:
+  host:
 
 development:
   <<: *default

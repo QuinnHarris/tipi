@@ -1,5 +1,4 @@
-#class ExistingVersion < ActiveRecord::ActiveRecordError
-#end
+class VersionedObjectError < StandardError; end
 
 module DatasetBranchContext
   attr_reader :context
@@ -85,7 +84,7 @@ module Versioned
       return super() if @in_dataset or (!Branch.in_context? and !branch)
       @in_dataset = true
       context = Branch.get_context(branch)
-      context.table # Temporary
+      #context.table # Temporary
       ds = dataset_from_branch(context.dataset, allow_deleted)
       ds.send("context=", context)
       @in_dataset = nil
@@ -96,7 +95,17 @@ module Versioned
       self.class.raw_dataset.where(record_id: record_id).order(:version).reverse.all
     end
 
-    # Automatically apply current context when creating object
+    private
+    def check_context_specifier(values)
+      len = %i[context branch branch_id].find_all { |i| values[i] }.compact.length
+      if len > 1
+        raise "Only specify one context, branch or branch_id"
+      end
+      len == 1
+    end
+    public
+
+    # AUTOMATICALLY apply current context when creating object
     # Doesn't work right if you use your own model initializers
     def initialize(values = {})
       raise "Can't specify record_id" if values[:record_id]
@@ -104,20 +113,11 @@ module Versioned
 
       # Should this use Branch.get_context ?
 
+      check_context_specifier(values)
+
       current = Branch.current!
 
-      if values[:branch] && values[:branch_id] &&
-          values[:branch].id != values[:branch_id]
-        raise "Mismatched branch with branch_id"
-      end
-
       if ctx = values.delete(:context)
-        if values[:branch] && ctx.branch != values[:branch]
-          raise "Specified branch doesn't match context"
-        end
-        if values[:branch_id] && ctx.branch.id != values[:branch_id]
-          raise "Specified branch_id doesn't match montext"
-        end
         if current && ctx != current
           raise "Specified context not current context"
         end
@@ -125,12 +125,10 @@ module Versioned
       end
 
       if current
-        raise "Can't add records with version lock" if current.version
+        raise VersionedObjectError, "Can't add object in context with version lock" if current.version
         
         if br = (values[:branch] || values[:branch_id])
-          unless current.includes?(br)
-            raise "Passed branch is not contained in this context"
-          end
+          current.not_included!(br)
         else
           values[:branch] = current.branch
           values[:branch_id] = current.branch.id
@@ -139,18 +137,30 @@ module Versioned
         raise "Must have branch if not in branch context" unless values[:branch] || values[:branch_id]
       end
 
-      #values[:branch_id] ||= values[:branch].id if values[:branch]
+      @context = current
 
       super values
     end
 
     def new(new_values = {}, &block)
       vals = values.dup
+
+      unless check_context_specifier(new_values)
+        vals[:context] = context if context and !Branch.in_context?
+      end
       record_id = vals.delete(:record_id) # Remove record_id to make initialize happy
-      [:version, :created_at].each { |column| vals.delete(column) }
-      vals[:context] = context if context
+      vals = vals.merge(new_values) # Should only have one context specifier
+      if branch_id != ((vals[:context] || vals[:branch]).try(:id) || vals[:branch_id])
+        ctx = BranchContext.new(vals[:context] || vals[:branch] || vals[:branch_id])
+        unless ctx.include?(branch_id)
+          raise "Specified branch does not contain this object"
+        end
+      end
+
+      [:version, :branch_id, :created_at].each { |column| vals.delete(column) }
+
       # !!! Apply cached branch if availible
-      o = self.class.new(vals.merge(new_values), &block)
+      o = self.class.new(vals, &block)
       o.values.merge!(:record_id => record_id)
       o.send('previous=', self)
       o
@@ -172,8 +182,8 @@ module Versioned
     # Should delete just be a row tag or an whole new table as this wastes alot of space
     # This approach simplifies and probably speeds up queries though
     def delete(branch = nil)
-      ctx = Branch.get_context(branch || context, false)
-      create(deleted: true, context: ctx)
+      # !!! Shouldn't be able to delete already deleted object
+      create(deleted: true, branch: branch)
     end
 
     # Check branch assignments are valid

@@ -27,7 +27,8 @@ module Tipi
 
     # Sequel Config
     # Allowed options: :sql, :ruby.
-    #config.sequel.schema_format = :sql
+    # Dump in SQL to capture stored proceedures and triggers 
+    config.sequel.schema_format = :sql
 
     # Whether to dump the schema after successful migrations.
     # Defaults to false in production and test, true otherwise.

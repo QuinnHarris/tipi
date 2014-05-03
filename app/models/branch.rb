@@ -1,3 +1,5 @@
+class SubContextError < StandardError; end
+
 # Represents Branch Context with a version lock
 class BranchContext
   def initialize(branch, version = nil)
@@ -26,7 +28,8 @@ class BranchContext
     @dataset = @branch.context_dataset(@version)
   end
 
-  def includes?(ctx)
+  private
+  def id_ver(ctx)
     if ctx.is_a?(BranchContext)
       sub_id = ctx.branch.id
       sub_version = ctx.version
@@ -42,13 +45,27 @@ class BranchContext
     else
       raise "Unkown type"
     end
+    return sub_id, sub_version
+  end
+  public
+
+  def not_included!(ctx)
+    sub_id, sub_version = id_ver(ctx)
     # Avoid loading data if we don't have to
     if id == sub_id
-      return version.nil? || (sub_version && sub_version <= version)
+      return if version.nil?
+      unless sub_version && sub_version <= version
+        raise SubContextError, "Branches match (#{id}) but #{version} > #{sub_version}" 
+      end
     end
-    data.find do |h| 
-      h[:id] == sub_id &&
-        (h[:version].nil? || (sub_version && sub_version <= h[:version]))
+    hash = data.find { |h| h[:id] == sub_id }
+    unless hash
+      raise SubContextError, "Could not find branch match for #{sub_id}"
+    end
+
+    return if hash[:version].nil?
+    unless sub_version && sub_version <= hash[:version]
+      raise SubContextError, "Branch found (#{sub_id}: #{hash[:name]}) but #{hash[:version]} > #{sub_version}"
     end
   end
 end
@@ -147,8 +164,10 @@ class Branch < Sequel::Model
     # Select this record as the start point of the recursive query
     # Include the version (or null) column used by recursive part
     base_ds = db[].select(Sequel.as(Sequel.cast(branch_id, :integer), :id),
-                          Sequel.as(0, :depth),
-                          Sequel.as(Sequel.cast(version, :bigint), :version))
+                          Sequel.as(name, :name),
+                          Sequel.as(Sequel.cast(nil, :integer), :successor_id),
+                          Sequel.as(Sequel.cast(version, :bigint), :version),
+                          Sequel.as(0, :depth) )
     
     # Connect from the working set (cte_table) through the connect_table back to this table
     # Use the least (lowest) version number from the current version or the connect_table version
@@ -156,13 +175,16 @@ class Branch < Sequel::Model
     recursive_ds = db[connect_table]
       .join(cte_table, [[:id, :successor_id]])
       .select(Sequel.qualify(connect_table, :predecessor_id),
-              Sequel.+(:depth, 1),
+              Sequel.qualify(cte_table, :name),
+              Sequel.qualify(connect_table, :successor_id),
               Sequel.function(:LEAST, *[connect_table, cte_table].map { |t|
-                                Sequel.qualify(t, :version) }))
+                                Sequel.qualify(t, :version) }),
+              Sequel.+(:depth, 1)
+              )
 
     db[cte_table]
       .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
-      .select_group(:id, :depth).select_append { min(:version).as(:version) }
+#      .select_group(:id, :depth).select_append { min(:version).as(:version) }
   end
 
   def create_context_table(version = nil)
@@ -196,14 +218,14 @@ class Branch < Sequel::Model
       if branch.is_a?(BranchContext)
         raise "Version specified with context" if version
         ctx = branch
-      else
+      elsif branch.is_a?(Branch)
         ctx = BranchContext.new(branch, version ? version : nil)
+      elsif branch.is_a?(Integer)
+        ctx = BranchContext.new(Branch.find(id: branch), version ? version : nil)
       end
 
       if in_context?
-        unless Branch.current!.includes?(ctx)
-          raise "Branch #{ctx.id} not predicessor of #{current!.branch.id}"
-        end
+        Branch.current!.not_included!(ctx)
         ctx = Branch.current!
       end
     else
@@ -227,24 +249,18 @@ class Branch < Sequel::Model
     version = opts[:version]
     version = version.version if version and !version.is_a?(Integer)
 
-    if cur = current!
-      unless rec = cur.includes?(BranchContext.new(branch, version))
-        raise "Branch #{branch.id} not predicessor of #{cur.branch.id}"
-      end
-      version = [version, rec[:version]].compact.min
-    end
+    cur = BranchContext.new(branch, version)
+    current!.not_included!(cur) if current!
 
-    current = nil
     begin
       db.transaction(opts) do
-        current = BranchContext.new(branch, version)
-        @@context_list.push(current)
+        @@context_list.push(cur)
         
         yield branch
       end
     ensure
       if current
-        raise "WTF" if current != @@context_list.last
+        raise "WTF" if cur != @@context_list.last
         @@context_list.pop
       end
     end
