@@ -27,7 +27,7 @@ function render(){renderer.layout(layout).run(g, d3.select("svg g"));}
 var data;
 function getData(){
 	graph = new dagreD3.Digraph; //reset the digraph
-	$.getJSON( "data.json", function( data ) {
+	$.getJSON("/app/assets/javascripts/data.json", function( data ) {
 		$.each( data.nodes, function( id, name ) {
   			var inIcon = "src = 'http://i.stack.imgur.com/BUlXq.png'";
 			var projectIcon = "src = 'http://www.endlessicons.com/wp-content/uploads/2013/02/wrench-icon-614x460.png'";
