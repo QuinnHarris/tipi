@@ -80,6 +80,7 @@ Sequel.migration do
       index         [:predecessor_id, :successor_id], unique: true
 
       BigInt        :version
+      Integer       :precedence,  null: false, default: 0
 
       check { predecessor_id != successor_id }
     end

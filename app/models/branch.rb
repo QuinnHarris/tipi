@@ -74,10 +74,13 @@ end
 class Branch < Sequel::Model
   plugin :single_table_inheritance, :type
 
-  many_to_many :predecessors, join_table: :branch_relations, :class => self,
-                                left_key: :successor_id, right_key: :predecessor_id
-  many_to_many :successors,   join_table: :branch_relations, :class => self,
-                               right_key: :successor_id,  left_key: :predecessor_id
+  aspects = %w(predecessor successor)
+  aspects.zip(aspects.reverse).each do |aspect, opposite|
+    many_to_many aspect.pluralize.to_sym, join_table: :branch_relations, :class => self,
+      left_key: :"#{opposite}_id", right_key: :"#{aspect}_id"
+    
+    one_to_many :"#{aspect}_relations", :class => BranchRelation, key: :"#{opposite}_id"
+  end
 
   private
   def _version_param(version)
@@ -89,16 +92,18 @@ class Branch < Sequel::Model
     version.version
   end
   
-  def _add_successor(o, version = nil)
+  def _add_successor(o, version = nil, precedence = nil)
     model.db[:branch_relations].insert(predecessor_id: id,
                                        successor_id: o.id,
-                                       version: _version_param(version))
+                                       version: _version_param(version),
+                                       precedence: precedence || 0)
   end
 
-  def _add_predecessor(o, version = nil)
+  def _add_predecessor(o, version = nil, precedence = nil)
     model.db[:branch_relations].insert(predecessor_id: o.id,
                                        successor_id: id,
-                                       version: _version_param(version))
+                                       version: _version_param(version),
+                                       precedence: precedence || 0)
 
     # If we have temp tables in a context they should be invalidated here
   end
@@ -125,9 +130,10 @@ class Branch < Sequel::Model
   # Create new successor branch from current branch with option context block
   def fork(options = {}, &block)
     version = options.delete(:version_lock)
+    precedence = options.delete(:precedence)
     db.transaction do
       o = self.class.create(options)
-      add_successor(o, version)
+      add_successor(o, version, precedence)
       self.class.context(o, {}, &block)
     end
   end
@@ -139,10 +145,11 @@ class Branch < Sequel::Model
   def self.merge(*args, &block)
     options = args.pop
     version = options.delete(:version_lock)
+    precedence = options.delete(:precedence)
     db.transaction do
       o = create(options)
       [args].flatten.each do |p|
-        p.add_successor(o, version)
+        p.add_successor(o, version, precedence)
       end
       context(o, {}, &block)
     end
@@ -159,46 +166,74 @@ class Branch < Sequel::Model
 
   def self.context_dataset(branch_id, version = nil)
     connect_table = :branch_relations
-    cte_table = :branch_decend
+    inner_cte_table = :inner_decend
+    outer_cte_table = :outer_decend
+    later_cte_table = :later
 
     # Select this record as the start point of the recursive query
     # Include the version (or null) column used by recursive part
-    base_ds = db[].select(Sequel.cast(branch_id, :integer).as(             :branch_id),
-                          Sequel.as(name,                                  :name),
-                          Sequel.cast(version, :bigint).as(                :version),
-                          Sequel.as(0,                                     :depth),
-                          Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_points) )
+    outer_base_ds =
+      db[].select(Sequel.cast(branch_id, :integer).as(             :branch_id),
+                  Sequel.cast(version, :bigint).as(                :version),
+                  Sequel.as(0,                                     :depth),
+                  Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_points),
+                  Sequel.cast(0, :integer).as(                     :prec),
+                  Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:visited) )
+    
+    later_ds =
+      db.from(db.from(outer_cte_table)
+                .select(:branch_id, :version, :depth, :branch_points, :prec, :visited,
+                        Sequel.function(:array_agg, :branch_id).over(:partition => :prec).as(:all)) )
+      .exclude(:prec => nil)
+      .select(:branch_id, :version, :depth, :branch_points, :prec,
+              Sequel.function(:array_cat, :visited, :all).as(:visited))
+                          
+    inner_base_ds = db.from(later_cte_table)
+      .select(:branch_id, :version, :depth, :branch_points, Sequel.cast(nil, :integer).as(:prec), :visited)
+      .limit(1)
     
     # Connect from the working set (cte_table) through the connect_table back to this table
     # Use the least (lowest) version number from the current version or the connect_table version
     # This ensures the version column on the connect_table locks in all objects at or below that version
-    recursive_ds =
-      db.from(
-              db.from(connect_table)
-                .join(cte_table, [[:branch_id, :successor_id]])
+    inner_recursive_ds =
+      db.from(db.from(connect_table)
+                .join(inner_cte_table, [[:branch_id, :successor_id]])
+                .exclude(:predecessor_id => Sequel.function(:any, :visited))
+                .where(:prec => nil)
+                .window(:suc, :partition => :successor_id,
+                        :order => Sequel.desc(:precedence))
                 .select(Sequel.qualify(connect_table, :predecessor_id).as(  :branch_id),
-                        Sequel.qualify(cte_table, :name).as(                :name),
-                        Sequel.function(:LEAST, *[connect_table, cte_table].map { |t|
+                        Sequel.function(:LEAST, *[connect_table, inner_cte_table].map { |t|
                                           Sequel.qualify(t, :version) }).as(:version),
                         Sequel.+(:depth, 1).as(                             :depth),
                                                                             :branch_points,
-                        Sequel.function(:count).*
-                          .over(:partition => :successor_id).as(            :count)
+                                                                            :precedence,
+                                                                            :visited,
+                        Sequel.function(:count).*.over(:window => :suc).as( :count),
+                        Sequel.function(:min, :precedence).over(:window => :suc).as(:min),
+                        Sequel.function(:max, :precedence).over(:window => :suc).as(:max),
                         ) )
-      .select(:branch_id, :name, :version, :depth,
+      .select(:branch_id, :version, :depth,
               Sequel.case([[Sequel.expr(:count) > 1,
                             Sequel.function(:array_append,
                                             :branch_points,
                                             :branch_id)]],
-                          :branch_points) )
+                          :branch_points).as(:branch_points),
+              Sequel.case([[Sequel.negate(:precedence => :max),
+                            :precedence]],
+                          nil).as(:prec),
+              :visited)
               
     
-    inner_ds = db[cte_table]
-      .with_recursive(cte_table, base_ds, recursive_ds, union_all: false)
-
+    inner_ds = db[inner_cte_table]
+      .with_recursive(inner_cte_table, inner_base_ds, inner_recursive_ds) #, union_all: false)
+      .union(db[later_cte_table].limit(nil, 1))
+      .with(later_cte_table, later_ds)
     
-    
-
+    outer_ds = db[outer_cte_table]
+      .with_recursive(outer_cte_table, outer_base_ds, inner_ds)
+      .where(:prec => nil)
+      .select(:branch_id, :version, :depth, :branch_points)
   end
 
   def create_context_table(version = nil)

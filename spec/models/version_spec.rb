@@ -7,49 +7,6 @@ describe Branch do
       expect(@branch).to be_an_instance_of(Branch)
     end
 
-    %w(predecessor successor).each do |aspect|
-      it "can add, remove and enumerate #{aspect.pluralize}" do
-        expect(@branch.send(aspect.pluralize)).to eq([])
-        
-        other = Branch.create(name: aspect)
-        expect(other).to be_an_instance_of(Branch)
-        expect(@branch.send("add_#{aspect}", other)).to eq(other)
-        expect(@branch.send(aspect.pluralize)).to eq([other])
-        expect(@branch.send(aspect.pluralize, true)).to eq([other])
-        
-        expect { @branch.send("add_#{aspect}", other) }.to raise_error(Sequel::UniqueConstraintViolation, /\"branch_relations_pkey\"/)
-        
-        expect(@branch.send("remove_#{aspect}", other)).to eq(other)
-        expect(@branch.send(aspect.pluralize)).to eq([])
-        expect(@branch.send(aspect.pluralize, true)).to eq([])
-      end
-    end
-
-    it "prohibits branch cycles" do
-      expect { @branch.add_successor(@branch) }.to raise_error(Sequel::DatabaseError, /cycle found/)
-
-      other = @branch
-      (1..3).each do |i|
-        other = other.fork(name: "Branch #{i}")
-      end
-      expect { other.add_successor(@branch) }.to raise_error(Sequel::DatabaseError, /cycle found/)
-    end
-    
-    it "can fork and merge" do
-      left = @branch.fork(name: 'Left')
-      expect(left).to be_an_instance_of(Branch)
-
-      right = @branch.fork(name: 'Right')
-      expect(right).to be_an_instance_of(Branch)
-
-      merge = Branch.merge(left, right, name: 'Merge')
-      expect(merge).to be_an_instance_of(Branch)
-
-      list = merge.context_dataset.all
-      expect(list.map { |e| e[:id] }.uniq.sort
-             ).to eq([@branch,left,right,merge].map { |e| e[:id] }.sort)
-    end
-
     it "node object has activemodel bahavior" do
       node_a = Node.new(name: 'Node A', branch: @branch)
       expect(node_a.persisted?).to be_false

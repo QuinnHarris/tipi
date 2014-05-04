@@ -77,6 +77,7 @@ CREATE TABLE branch_relations (
     predecessor_id integer NOT NULL,
     successor_id integer NOT NULL,
     version bigint,
+    precedence integer DEFAULT 0 NOT NULL,
     CONSTRAINT branch_relations_check CHECK (true)
 );
 
