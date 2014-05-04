@@ -106,7 +106,7 @@ describe Branch do
     end
     
     br_a.context do
-      # In own context because aborts transaction
+      # In own context because failure aborts transaction
       expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_version_to_version_deleted_key\"/)
     end
 
@@ -129,7 +129,6 @@ describe Branch do
 
     # node_a has retained br_a context
     expect(node_a.to).to eq([node_b])
-
   end
 
 end
