@@ -46,8 +46,8 @@ describe Branch do
       expect(merge).to be_an_instance_of(Branch)
 
       list = merge.context_dataset.all
-      expect(list.map { |e| e[:id] }.uniq.sort
-             ).to eq([@branch,left,right,merge].map { |e| e[:id] }.sort)
+      expect(list.map { |e| e[:id] }.uniq)
+        .to match_array([@branch,left,right,merge].map { |e| e[:id] })
     end
 
     it "node object has activemodel bahavior" do
@@ -149,7 +149,7 @@ describe Branch do
     end
     
     br_a.context do
-      # In own context because aborts transaction
+      # In own context because failure aborts transaction
       expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_version_to_version_deleted_key\"/)
     end
 
@@ -172,7 +172,6 @@ describe Branch do
 
     # node_a has retained br_a context
     expect(node_a.to).to eq([node_b])
-
   end
 
 end
