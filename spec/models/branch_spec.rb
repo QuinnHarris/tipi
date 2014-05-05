@@ -54,34 +54,38 @@ describe Branch do
   end
 
   it "can fork and merge 2" do
-    root = Branch.create(name: 'Root')
-    expect(root).to be_an_instance_of(Branch)
-
-    left = root.fork(name: 'Left')
-    expect(left).to be_an_instance_of(Branch)
+    list =
+      [
+       root = Branch.create(name: 'Root'),
+       left = root.fork(name: 'Left'),
+       right = root.fork(name: 'Right', version_lock: true),
+       merge = Branch.merge(left, right, name: 'Merge'),
+       lock = merge.fork(name: 'Lock', version_lock: true),
+       mega_merge = Branch.merge(lock, merge, right, left, root, name: 'Mega Merge')
+      ]
     
-    right = root.fork(name: 'Right')
-    expect(right).to be_an_instance_of(Branch)
-    
-    merge = Branch.merge(left, right, name: 'Merge')
-    expect(merge).to be_an_instance_of(Branch)
+    list.each { |b| expect(b).to be_an_instance_of(Branch) }
 
-    def traverse(branch, depth = 0, version = nil, bp = [], visited = Set.new)
+    def traverse(branch, successor_id = nil, depth = 0, version = nil, bp = [])
       list = branch.predecessor_relations.map do |pred|
         traverse(pred.predecessor,
+                 branch.id,
                  depth+1,
                  [version, pred.version].compact.min,
                  (branch.predecessor_relations.length > 1) ?
                  (bp + [pred.predecessor_id]) : bp)
       end.flatten
-      [{ branch_id: branch.id,
-          version: version,
-            depth: depth,
-         branch_points: bp
+      [{   branch_id: branch.id,
+        successor_id: successor_id,
+             version: version,
+               depth: depth,
+         branch_path: bp
       }] + list
     end
-    
-    list = merge.context_dataset.all
-    expect(list).to match_array(traverse(merge))
+
+    list.each do |branch|
+      rows = branch.context_dataset.all
+      expect(rows).to match_array(traverse(branch))
+    end
   end
 end

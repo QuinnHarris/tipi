@@ -138,8 +138,10 @@ CREATE TABLE edges (
     created_at timestamp without time zone NOT NULL,
     from_branch_id integer NOT NULL,
     from_record_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     to_branch_id integer NOT NULL,
     to_record_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -163,6 +165,7 @@ CREATE TABLE nodes (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     branch_id integer NOT NULL,
     record_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
     name text NOT NULL,
@@ -288,11 +291,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edges_from_branch_id_from_record_id_to_branch_id_to_record__key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_branch_id_from_record_id_from_branch_path_to_bra_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_branch_id_from_record_id_to_branch_id_to_record__key UNIQUE (from_branch_id, from_record_id, to_branch_id, to_record_id, deleted);
+    ADD CONSTRAINT edges_from_branch_id_from_record_id_from_branch_path_to_bra_key UNIQUE (from_branch_id, from_record_id, from_branch_path, to_branch_id, to_record_id, to_branch_path, deleted);
 
 
 --
@@ -343,17 +346,17 @@ CREATE UNIQUE INDEX branch_relations_predecessor_id_successor_id_index ON branch
 
 
 --
--- Name: edges_from_branch_id_from_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_branch_id_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX edges_from_branch_id_from_record_id_index ON edges USING btree (from_branch_id, from_record_id);
+CREATE INDEX edges_from_branch_id_from_record_id_from_branch_path_index ON edges USING btree (from_branch_id, from_record_id, from_branch_path);
 
 
 --
--- Name: edges_to_branch_id_to_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_to_branch_id_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX edges_to_branch_id_to_record_id_index ON edges USING btree (to_branch_id, to_record_id);
+CREATE INDEX edges_to_branch_id_to_record_id_to_branch_path_index ON edges USING btree (to_branch_id, to_record_id, to_branch_path);
 
 
 --

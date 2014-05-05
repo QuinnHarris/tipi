@@ -61,7 +61,7 @@ describe Branch do
       expect(node_a_del.context).to eq(Branch.current)
       expect(Node.all).to match_array([node_b])
 
-      expect { br_a.context { } }.to raise_error(SubContextError)
+      expect { br_a.context { } }.to raise_error(BranchContextError, /^Branch found.+but/)
     end
 
     br_b.context do
@@ -72,7 +72,7 @@ describe Branch do
 
       expect(Node.all).to match_array([node_a, node_b, node_c])
 
-      expect { Node.create(name: 'Fail', branch: br_c) }.to raise_error(SubContextError)
+      expect { Node.create(name: 'Fail', branch: br_c) }.to raise_error(BranchContextError, /^Branch not found for/)
     end
 
     br_c.context do
@@ -84,11 +84,35 @@ describe Branch do
       br_c.context(version: node_b_del.version-1) do
         expect(Node.all).to match_array([node_b])
 
-        expect { node_b.delete }.to raise_error(VersionedObjectError)
+        expect { node_b.delete }.to raise_error(BranchContextError, "Context without version required")
 
-        expect { br_c.context { } }.to raise_error(SubContextError)
+        expect { br_c.context { } }.to raise_error(BranchContextError, /Branch match.+but/)
       end
     end
+
+    # Merge Tests
+    br_d = Branch.merge(br_a, br_b, name: 'Merge AB') do
+      expect(Node.all)
+        .to match_array([[node_a, br_a],
+                         [node_a, br_b],
+                         [node_b, br_b],
+                         [node_c, br_a],
+                         [node_c, br_b]].map do |node, branch|
+                          node.dup.tap { |n| n[:branch_path] = [branch.id] }
+                        end)
+      
+      node_b_new = node_b.create(name: "Node B v2")
+      
+      node_b_row = Node.db[:nodes].where(version: node_b.version).first
+      node_b_new_row = Node.db[:nodes].where(version: node_b_new.version).first
+
+      expect(node_b_row.delete(:branch_path)).to eq([])
+      expect(node_b_new_row.delete(:branch_path)).to eq([br_b.id])
+
+      # More tests
+
+    end
+    
   end
 
   it "can link nodes with edges" do

@@ -1,19 +1,36 @@
-class SubContextError < StandardError; end
+class BranchContextError < StandardError; end
 
 # Represents Branch Context with a version lock
 class BranchContext
-  def initialize(branch, version = nil)
-    @branch, @version = branch.freeze, version
+  # Don't duplicate BranchContexts
+  def self.new(branch, version = nil)
+    return branch if branch.is_a?(BranchContext) and version.nil?
+    super
   end
-  attr_reader :branch, :version
-  
-  def id
-    branch.id
+
+  def initialize(branch, version = nil)
+    if branch.is_a?(Integer)
+      @id = branch
+    elsif branch.is_a?(Branch)
+      @id = branch.id
+      @branch = branch
+    else
+      raise "Unknown argument: #{branch.inspect}"
+    end
+    @version = version
+  end
+  attr_reader :id, :version
+
+  def branch_nil; @branch; end
+
+  def branch
+    return @branch if @branch
+    @branch = Branch.where(id: @id).first
   end
   
   def table
     return @table if @table
-    @table = @branch.create_context_table(version)
+    @table = branch.create_context_table(version)
   end
   
   def data
@@ -29,19 +46,21 @@ class BranchContext
   end
 
   private
-  def id_ver(ctx)
+  def id_version(ctx, sub_version = nil)
     if ctx.is_a?(BranchContext)
       sub_id = ctx.branch.id
+      raise "Unexpected Version" if sub_version
       sub_version = ctx.version
     elsif ctx.is_a?(Branch)
       sub_id = ctx.id
-      sub_version = nil
     elsif ctx.is_a?(Integer)
       sub_id = ctx
-      sub_version = nil
     elsif ctx.respond_to?(:branch_id)
       sub_id = ctx.branch_id
-      sub_version = ctx.version if ctx.respond_to?(:version)
+      if ctx.respond_to?(:version)
+        raise "Unexpected Version" if sub_version
+        sub_version = ctx.version
+      end
     else
       raise "Unkown type"
     end
@@ -49,24 +68,59 @@ class BranchContext
   end
   public
 
-  def not_included!(ctx)
-    sub_id, sub_version = id_ver(ctx)
+  # Raise BranchContextError if the passed branch/context is not included in this context
+  def not_included!(ctx, ver = nil)
+    sub_id, sub_version = id_version(ctx, ver)
     # Avoid loading data if we don't have to
     if id == sub_id
-      return if version.nil?
+      return if version.nil? or ver == false
       unless sub_version && sub_version <= version
-        raise SubContextError, "Branches match (#{id}) but #{version} > #{sub_version}" 
+        raise BranchContextError, "Branch match (#{id}) but #{version} > #{sub_version}" 
       end
+      return
     end
-    hash = data.find { |h| h[:id] == sub_id }
+    hash = data.find { |h| h[:branch_id] == sub_id }
     unless hash
-      raise SubContextError, "Could not find branch match for #{sub_id}"
+      raise BranchContextError, "Branch not found for #{sub_id}"
     end
 
-    return if hash[:version].nil?
+    return sub_id if hash[:version].nil? or ver == false
     unless sub_version && sub_version <= hash[:version]
-      raise SubContextError, "Branch found (#{sub_id}: #{hash[:name]}) but #{hash[:version]} > #{sub_version}"
+      raise BranchContextError, "Branch found (#{sub_id}: #{hash[:name]}) but #{hash[:version]} > #{sub_version}"
     end
+    return sub_id
+  end
+
+  # Raise BranchContextError if objects from the passed branch/context would have been
+  # duplicated through merged branches to this context
+  def not_included_or_duplicated!(ctx, ver = nil)
+    sub_id = not_included!(ctx, ver)
+    return unless sub_id
+
+    while true
+      list = data.find_all { |h| h[:branch_id] == sub_id }
+      raise BranchContextError, "Object Duplicated: #{list.inspect}" if list.length > 1
+      raise "Unexpected empty list" if list.empty?
+      if list.first[:successor_id]
+        sub_id = list.first[:successor_id]
+      else
+        raise "Did not find root" unless sub_id == id
+        break
+      end
+    end
+  end
+
+  # Called after not_included_or_deplicated!
+  def path_from(ctx)
+    sub_id, sub_version = id_version(ctx)
+    
+    path = []
+    while sub_id
+      suc = data.find { |h| h[:branch_id] == sub_id }[:successor_id]
+      path << sub_id if data.find_all { |h| h[:successor_id] == suc }.length > 1
+      sub_id = suc
+    end
+    path
   end
 end
 
@@ -92,18 +146,16 @@ class Branch < Sequel::Model
     version.version
   end
   
-  def _add_successor(o, version = nil, precedence = nil)
+  def _add_successor(o, version = nil)
     model.db[:branch_relations].insert(predecessor_id: id,
                                        successor_id: o.id,
-                                       version: _version_param(version),
-                                       precedence: precedence || 0)
+                                       version: _version_param(version))
   end
 
-  def _add_predecessor(o, version = nil, precedence = nil)
+  def _add_predecessor(o, version = nil)
     model.db[:branch_relations].insert(predecessor_id: o.id,
                                        successor_id: id,
-                                       version: _version_param(version),
-                                       precedence: precedence || 0)
+                                       version: _version_param(version))
 
     # If we have temp tables in a context they should be invalidated here
   end
@@ -130,10 +182,9 @@ class Branch < Sequel::Model
   # Create new successor branch from current branch with option context block
   def fork(options = {}, &block)
     version = options.delete(:version_lock)
-    precedence = options.delete(:precedence)
     db.transaction do
       o = self.class.create(options)
-      add_successor(o, version, precedence)
+      add_successor(o, version)
       self.class.context(o, {}, &block)
     end
   end
@@ -145,11 +196,10 @@ class Branch < Sequel::Model
   def self.merge(*args, &block)
     options = args.pop
     version = options.delete(:version_lock)
-    precedence = options.delete(:precedence)
     db.transaction do
       o = create(options)
       [args].flatten.each do |p|
-        p.add_successor(o, version, precedence)
+        p.add_successor(o, version)
       end
       context(o, {}, &block)
     end
@@ -166,74 +216,42 @@ class Branch < Sequel::Model
 
   def self.context_dataset(branch_id, version = nil)
     connect_table = :branch_relations
-    inner_cte_table = :inner_decend
-    outer_cte_table = :outer_decend
-    later_cte_table = :later
+    cte_table = :branch_decend
 
     # Select this record as the start point of the recursive query
     # Include the version (or null) column used by recursive part
-    outer_base_ds =
-      db[].select(Sequel.cast(branch_id, :integer).as(             :branch_id),
-                  Sequel.cast(version, :bigint).as(                :version),
-                  Sequel.as(0,                                     :depth),
-                  Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_points),
-                  Sequel.cast(0, :integer).as(                     :prec),
-                  Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:visited) )
-    
-    later_ds =
-      db.from(db.from(outer_cte_table)
-                .select(:branch_id, :version, :depth, :branch_points, :prec, :visited,
-                        Sequel.function(:array_agg, :branch_id).over(:partition => :prec).as(:all)) )
-      .exclude(:prec => nil)
-      .select(:branch_id, :version, :depth, :branch_points, :prec,
-              Sequel.function(:array_cat, :visited, :all).as(:visited))
-                          
-    inner_base_ds = db.from(later_cte_table)
-      .select(:branch_id, :version, :depth, :branch_points, Sequel.cast(nil, :integer).as(:prec), :visited)
-      .limit(1)
+    base_ds = db[].select(Sequel.as(branch_id, :branch_id),
+                          Sequel.cast(nil, :integer).as(:successor_id),
+                          Sequel.cast(version, :bigint).as(:version),
+                          Sequel.as(0, :depth),
+                          Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_path) )
     
     # Connect from the working set (cte_table) through the connect_table back to this table
     # Use the least (lowest) version number from the current version or the connect_table version
-    # This ensures the version column on the connect_table locks in all objects at or below that version
-    inner_recursive_ds =
-      db.from(db.from(connect_table)
-                .join(inner_cte_table, [[:branch_id, :successor_id]])
-                .exclude(:predecessor_id => Sequel.function(:any, :visited))
-                .where(:prec => nil)
-                .window(:suc, :partition => :successor_id,
-                        :order => Sequel.desc(:precedence))
-                .select(Sequel.qualify(connect_table, :predecessor_id).as(  :branch_id),
-                        Sequel.function(:LEAST, *[connect_table, inner_cte_table].map { |t|
-                                          Sequel.qualify(t, :version) }).as(:version),
-                        Sequel.+(:depth, 1).as(                             :depth),
-                                                                            :branch_points,
-                                                                            :precedence,
-                                                                            :visited,
-                        Sequel.function(:count).*.over(:window => :suc).as( :count),
-                        Sequel.function(:min, :precedence).over(:window => :suc).as(:min),
-                        Sequel.function(:max, :precedence).over(:window => :suc).as(:max),
+    # This ensures the version column on the connect_table retrieves in all objects at or below that version
+    recursive_ds =
+      db.from(
+              db.from(connect_table)
+                .join(cte_table, [[:branch_id, :successor_id]])
+                .select(Sequel.as(:predecessor_id, :branch_id),
+                        Sequel.qualify(connect_table, :successor_id),
+                        Sequel.function(:LEAST,*[connect_table, cte_table].map { |t|
+                                          Sequel.qualify(t, :version) })
+                          .as(:version),
+                        Sequel.+(:depth, 1).as(:depth),
+                        :branch_path,
+                        Sequel.function(:count).*
+                          .over(:partition => Sequel.qualify(connect_table, :successor_id))
+                          .as(:count)
                         ) )
-      .select(:branch_id, :version, :depth,
+      .select(:branch_id, :successor_id, :version, :depth,
               Sequel.case([[Sequel.expr(:count) > 1,
                             Sequel.function(:array_append,
-                                            :branch_points,
+                                            :branch_path,
                                             :branch_id)]],
-                          :branch_points).as(:branch_points),
-              Sequel.case([[Sequel.negate(:precedence => :max),
-                            :precedence]],
-                          nil).as(:prec),
-              :visited)
-              
+                          :branch_path) )
     
-    inner_ds = db[inner_cte_table]
-      .with_recursive(inner_cte_table, inner_base_ds, inner_recursive_ds) #, union_all: false)
-      .union(db[later_cte_table].limit(nil, 1))
-      .with(later_cte_table, later_ds)
-    
-    outer_ds = db[outer_cte_table]
-      .with_recursive(outer_cte_table, outer_base_ds, inner_ds)
-      .where(:prec => nil)
-      .select(:branch_id, :version, :depth, :branch_points)
+    db[cte_table].with_recursive(cte_table, base_ds, recursive_ds)
   end
 
   def create_context_table(version = nil)
@@ -255,7 +273,7 @@ class Branch < Sequel::Model
   end
 
   def self.current
-    raise "No current context" if @@context_list.empty?
+    raise BranchContextError, "No current context" if @@context_list.empty?
     current!
   end
 
@@ -264,25 +282,14 @@ class Branch < Sequel::Model
   # this is needed for anything that modifies the database
   def self.get_context(branch = nil, version = nil)
     if branch
-      if branch.is_a?(BranchContext)
-        raise "Version specified with context" if version
-        ctx = branch
-      elsif branch.is_a?(Branch)
-        ctx = BranchContext.new(branch, version ? version : nil)
-      elsif branch.is_a?(Integer)
-        ctx = BranchContext.new(Branch.find(id: branch), version ? version : nil)
-      end
-
-      if in_context?
-        Branch.current!.not_included!(ctx)
-        ctx = Branch.current!
-      end
+      ctx = BranchContext.new(branch, version)
+      Branch.current!.not_included!(ctx) if in_context?
     else
       ctx = Branch.current
     end
 
     if version == false and ctx.version
-      raise "Version less context required"
+      raise BranchContextError, "Context without version required"
     end
 
     ctx

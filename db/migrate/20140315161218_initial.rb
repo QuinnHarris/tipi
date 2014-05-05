@@ -27,6 +27,7 @@ module Sequel
 
         unless options[:no_record]
           Integer   :record_id, null: false
+          column    :branch_path, 'integer[]', null: false, default: '{}'
 
           refs = [:record_id, :branch_id]
           
@@ -135,13 +136,16 @@ CREATE CONSTRAINT TRIGGER cycle_test
 
     create_version_table :edges, no_record: true do
       fgn_keys = [:from, :to].map do |aspect|
-        branch, record = %w(branch record).map { |n| :"#{aspect}_#{n}_id" }
+        rows = %w(branch_id record_id branch_path).map { |n| :"#{aspect}_#{n}" }
+        branch, record, branch_path = rows
         foreign_key branch, :branches, null: false
         #foreign_key record, :nodes, key: :record_id
         # must be in set of record_ids on nodes but record_ids is not unique
         Integer record, null: false
-        index [branch, record]
-        [branch, record]
+        column branch_path, 'integer[]', null: false, default: '{}'
+
+        index rows
+        rows
       end.flatten
 
       unique fgn_keys + [:deleted]
