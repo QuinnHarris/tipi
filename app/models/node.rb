@@ -1,3 +1,35 @@
+# Used to use function in pg array range accessors
+class ExRange < Range
+  def initialize(b, e)
+    @begin, @end = b, e
+  end
+  attr_reader :begin, :end
+end
+
+module Sequel
+  module Postgres
+    class ArrayOp
+      # Possible inclusion in Sequel to make pg_array_op perform as expected with arrays
+      def initialize(value)
+        if value.instance_of?(Array)
+          super Sequel.pg_array(value)
+        else
+          super value
+        end
+      end
+
+      def [](key)
+        b = self
+        # Kludge to wrap array in parenthesis
+        b = SQL::Function.new('', b) if value.is_a?(PGArray)
+        s = Sequel::SQL::Subscript.new(b, [key])
+        s = ArrayOp.new(s) if key.is_a?(Range)
+        s
+      end
+    end
+  end
+end
+
 class Node < Sequel::Model
   plugin :single_table_inheritance, :type
   include Versioned
@@ -6,62 +38,78 @@ class Node < Sequel::Model
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
     many_to_many aspect, join_table: :edges, :class => self, reciprocal: opposite,
-                         left_key: "#{aspect}_version".to_sym,
-                         right_key: "#{opposite}_version".to_sym,
+                         left_key: [:"#{aspect}_record_id"], #, :"#{aspect}_branch_path"],
+                         right_key: [:"#{opposite}_record_id"], #, :"#{opposite}_branch_path"],
     :select => nil, # Don't override our select statements
     :dataset =>
       (proc do |r|
-         ctx = Branch.get_context(context)
+         ctx = Branch.get_context(Branch.current! || context)
          branch_context_data = ctx.dataset
 
          dataset = r.associated_class.raw_dataset
-         
+
          # Assuming this node is the latest in the current branch context
-         # Otherwise we need to establish a new context from this branch version and branch ids
-         ds = dataset.join(Sequel.as(:nodes, :dst),
-                           :record_id => :record_id) do |j, lj|
-           Sequel.qualify(j, :version) <= Sequel.qualify(lj, :version)
-         end
-           .join(r[:join_table], r[:right_key] => :version)
-           .join(Sequel.as(:nodes, :src), :version => r[:left_key])
-           .where(Sequel.qualify(:src, :record_id) => record_id) { |o|
-           Sequel.qualify(:src, :version) <= version } # Neccissary?
+         edge_dst_path = Sequel.pg_array(:"#{opposite}_branch_path")
+         ds = dataset.join(r[:join_table],
+                           { :"#{opposite}_record_id" => :record_id,
+                             Sequel.qualify(:nodes,
+                                            :branch_path)
+                               .pg_array[ExRange.new(1, Sequel.function(:coalesce,
+                                                                        edge_dst_path.length,
+                                                                        0))] =>
+                             edge_dst_path }
+                           )
          
+         edge_src_path = Sequel.pg_array(:"#{aspect}_branch_path")
+         this_branch_path = Sequel.pg_array_op(branch_path)
+         ds = ds.where(:"#{aspect}_record_id" => record_id,
+                       this_branch_path[ExRange.new(1, Sequel.function(:coalesce,
+                                                                       edge_src_path.length,
+                                                                       0))] =>
+                       edge_src_path)
+
          # Must check to from branch context if there is a version lock
-         tables = [r[:join_table], :nodes, :src]
+         tables = [r[:join_table], :nodes]
          tables.each do |table|
+           # !!! Duplicated in versioned code, make part of branch ds?
            ds = ds.join(Sequel.as(branch_context_data, "branch_#{table}"),
-                        :id => Sequel.qualify(table, :branch_id)) do |j, lj|
+                        :branch_id => Sequel.qualify(table, :branch_id)) do |j, lj|
              Sequel.expr(Sequel.qualify(j, :version) => nil) | 
                (Sequel.qualify(table, :version) <= Sequel.qualify(j, :version))
            end
          end
-         
-         ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
+
+         branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
+           .pg_array.concat(Sequel.qualify(:nodes, :branch_path) )
+
+         ds = ds.select(*(r.associated_class.columns - [:branch_path]).map do |n|
+                          Sequel.qualify(:nodes, n) end,
+                        branch_path_select.as(:branch_path),
                         Sequel.as(Sequel.qualify(r[:join_table], :deleted),
-                                  :join_deleted)) do |o|
-           o.rank.function
-             .over(:partition => Sequel.qualify(:nodes, :record_id),
-                   :order => tables.map do |t|
-                     [Sequel.qualify(:"branch_#{t}", :depth),
-                      Sequel.qualify(t, :version).desc]
-                   end.flatten)
-         end
-         
+                                  :join_deleted),
+                        Sequel.function(:rank)
+                          .over(:partition => [:record_id, branch_path_select],
+                                :order => tables.map do |t|
+                                  [Sequel.qualify("branch_#{t}", :depth), 
+                                   Sequel.qualify(t, :version).desc]
+                                end.flatten ) )
+
          ds = dataset.from(ds).filter(:rank => 1, :deleted => false, :join_deleted => false).select(*r.associated_class.columns)
          ds.send("context=" ,ctx)
          ds
        end)
 
     define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
-      ctx = Branch.get_context(branch || context, false)
+      ctx = Branch.get_context(branch || Branch.current! || context, false)
       
       ctx.not_included!(self)
       ctx.not_included!(node)
 
       h = { :branch_id => ctx.branch.id,
-        :"#{aspect}_version" => version,
-        :"#{opposite}_version" => node.version,
+        :"#{aspect}_record_id" => record_id,
+        :"#{aspect}_branch_path" => branch_path,
+        :"#{opposite}_record_id" => node.record_id,
+        :"#{opposite}_branch_path" => node.branch_path,
         :created_at => self.class.dataset.current_datetime,
         :deleted => deleted ? true : false}
       

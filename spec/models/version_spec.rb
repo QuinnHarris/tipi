@@ -131,7 +131,7 @@ describe Branch do
     
     br_a.context do
       # In own context because failure aborts transaction
-      expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_version_to_version_deleted_key\"/)
+      expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_record_id_from_branch_path_to_record_id_to/)
     end
 
     br_b = br_a.fork(name: 'Branch B') do

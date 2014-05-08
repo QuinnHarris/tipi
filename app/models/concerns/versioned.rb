@@ -50,6 +50,7 @@ module Versioned
 
     # Include branch_path as primary key as branching can cause duplicate (but different) objects with the same version.  Only version should be used to update rows though.
     set_primary_key :version
+    #, :branch_path]
 
     dataset_module DatasetBranchContext
     attr_reader :context
@@ -62,13 +63,15 @@ module Versioned
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private
     def self.dataset_from_branch(branch_context_dataset, allow_deleted = nil)
-      ds = raw_dataset.join(branch_context_dataset, :branch_id => :branch_id) do |j ,lj, js|
-        Sequel.expr(Sequel.qualify(j, :version) => nil) | (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
+      # !!! Duplicated in node/edge code, make part of branch ds?
+      ds = raw_dataset.join(branch_context_dataset,
+                            :branch_id => :branch_id) do |j ,lj, js|
+        Sequel.expr(Sequel.qualify(j, :version) => nil) |
+          (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
       end
 
-      branch_path_select = Sequel.function(:array_cat,
-                                           Sequel.qualify(ds.opts[:last_joined_table], :branch_path),
-                                           Sequel.qualify(table_name, :branch_path) )
+      branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
+        .pg_array.concat(Sequel.qualify(table_name, :branch_path) )
       
       ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
                 branch_path_select.as(:branch_path),
@@ -90,7 +93,7 @@ module Versioned
       return super() if @in_dataset or (!Branch.in_context? and !branch)
       @in_dataset = true
       context = Branch.get_context(branch)
-      context.table # Temporary
+#      context.table # Temporary
       ds = dataset_from_branch(context.dataset, allow_deleted)
       ds.send("context=", context)
       @in_dataset = nil

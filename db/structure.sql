@@ -77,7 +77,6 @@ CREATE TABLE branch_relations (
     predecessor_id integer NOT NULL,
     successor_id integer NOT NULL,
     version bigint,
-    precedence integer DEFAULT 0 NOT NULL,
     CONSTRAINT branch_relations_check CHECK (true)
 );
 
@@ -91,7 +90,6 @@ CREATE TABLE branches (
     type text NOT NULL,
     name text NOT NULL,
     description text,
-    precedence integer DEFAULT 0 NOT NULL,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone
 );
@@ -135,11 +133,10 @@ CREATE SEQUENCE version_seq
 CREATE TABLE edges (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     created_at timestamp without time zone NOT NULL,
-    from_branch_id integer NOT NULL,
     from_record_id integer NOT NULL,
     from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    to_branch_id integer NOT NULL,
     to_record_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     deleted boolean DEFAULT false NOT NULL
@@ -164,8 +161,8 @@ CREATE TABLE node_instances (
 CREATE TABLE nodes (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     branch_id integer NOT NULL,
-    record_id integer NOT NULL,
     branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    record_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
     name text NOT NULL,
@@ -291,11 +288,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edges_from_branch_id_from_record_id_from_branch_path_to_bra_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_record_id_from_branch_path_to_record_id_to_branc_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_branch_id_from_record_id_from_branch_path_to_bra_key UNIQUE (from_branch_id, from_record_id, from_branch_path, to_branch_id, to_record_id, to_branch_path, deleted);
+    ADD CONSTRAINT edges_from_record_id_from_branch_path_to_record_id_to_branc_key UNIQUE (from_record_id, from_branch_path, to_record_id, to_branch_path, deleted);
 
 
 --
@@ -339,38 +336,31 @@ ALTER TABLE ONLY users
 
 
 --
--- Name: branch_relations_predecessor_id_successor_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: branch_relations_successor_id_predecessor_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE UNIQUE INDEX branch_relations_predecessor_id_successor_id_index ON branch_relations USING btree (predecessor_id, successor_id);
-
-
---
--- Name: edges_from_branch_id_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX edges_from_branch_id_from_record_id_from_branch_path_index ON edges USING btree (from_branch_id, from_record_id, from_branch_path);
+CREATE UNIQUE INDEX branch_relations_successor_id_predecessor_id_index ON branch_relations USING btree (successor_id, predecessor_id);
 
 
 --
--- Name: edges_to_branch_id_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX edges_to_branch_id_to_record_id_to_branch_path_index ON edges USING btree (to_branch_id, to_record_id, to_branch_path);
-
-
---
--- Name: nodes_branch_id_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX nodes_branch_id_record_id_index ON nodes USING btree (branch_id, record_id);
+CREATE INDEX edges_from_record_id_from_branch_path_index ON edges USING btree (from_record_id, from_branch_path);
 
 
 --
--- Name: nodes_record_id_branch_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX nodes_record_id_branch_id_index ON nodes USING btree (record_id, branch_id);
+CREATE INDEX edges_to_record_id_to_branch_path_index ON edges USING btree (to_record_id, to_branch_path);
+
+
+--
+-- Name: nodes_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX nodes_record_id_index ON nodes USING btree (record_id);
 
 
 --
@@ -430,22 +420,6 @@ ALTER TABLE ONLY branch_relations
 
 ALTER TABLE ONLY edges
     ADD CONSTRAINT edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
-
-
---
--- Name: edges_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_branch_id_fkey FOREIGN KEY (from_branch_id) REFERENCES branches(id);
-
-
---
--- Name: edges_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_to_branch_id_fkey FOREIGN KEY (to_branch_id) REFERENCES branches(id);
 
 
 --

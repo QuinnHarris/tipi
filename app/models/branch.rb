@@ -4,7 +4,7 @@ class BranchContextError < StandardError; end
 class BranchContext
   # Don't duplicate BranchContexts
   def self.new(branch, version = nil)
-    return branch if branch.is_a?(BranchContext) and version.nil?
+    return branch if branch.is_a?(BranchContext) and !version
     super
   end
 
@@ -26,6 +26,14 @@ class BranchContext
   def branch
     return @branch if @branch
     @branch = Branch.where(id: @id).first
+  end
+
+  def ==(other)
+    id == other.id and version == other.version
+  end
+
+  def table_clear!
+    @table = nil
   end
   
   def table
@@ -246,9 +254,8 @@ class Branch < Sequel::Model
                         ) )
       .select(:branch_id, :successor_id, :version, :depth,
               Sequel.case([[Sequel.expr(:count) > 1,
-                            Sequel.function(:array_append,
-                                            :branch_path,
-                                            :branch_id)]],
+                            Sequel.pg_array(:branch_path)
+                              .concat(:branch_id) ]],
                           :branch_path) )
     
     db[cte_table].with_recursive(cte_table, base_ds, recursive_ds)
@@ -311,14 +318,14 @@ class Branch < Sequel::Model
     begin
       db.transaction(opts) do
         @@context_list.push(cur)
+        cur.table # Generate context table
         
         yield branch
       end
     ensure
-      if current
-        raise "WTF" if cur != @@context_list.last
-        @@context_list.pop
-      end
+      raise "WTF" if cur != @@context_list.last
+      cur.table_clear! # !!!Remove table reference incase droped when transaction is complete.  Fix this
+      @@context_list.pop
     end
     branch
   end
