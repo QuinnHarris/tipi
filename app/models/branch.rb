@@ -48,9 +48,21 @@ class BranchContext
   
   # Returns dataset or table if exists
   def dataset
-    return @table if @table
-    return @dataset if @dataset
-    @dataset = @branch.context_dataset(@version)
+    if block_given?
+      if @table
+        ds = yield @table
+      else
+        @dataset ||=  @branch.context_dataset(@version)
+        table_name = :branch_decend
+        ds = yield table_name
+        ds = ds.with(table_name, @dataset)
+      end
+      ds.send("context=", self)
+      ds
+    else
+      return @table if @table
+      @dataset ||= @branch.context_dataset(@version)
+    end
   end
 
   private

@@ -108,11 +108,14 @@ describe Branch do
 
       expect(node_b_row.delete(:branch_path)).to eq([])
       expect(node_b_new_row.delete(:branch_path)).to eq([br_b.id])
-
-      # More tests
-
     end
     
+  end
+
+  def bp_match(array)
+    array.map do |node, branch|
+      node.dup.tap { |n| n[:branch_path] = [branch.id] }
+    end
   end
 
   it "can link nodes with edges" do
@@ -153,6 +156,40 @@ describe Branch do
 
     # node_a has retained br_a context
     expect(node_a.to).to eq([node_b])
+
+    br_d = Branch.merge(br_a, br_b, name: 'Branch D (A B Merge)') do
+      # Node A
+      expect { node_a.to }.to raise_error(BranchContextError, /^Object Duplicated/)
+      node_a_list = Node.where(name: 'Node A').all
+      expect(node_a_list).to eq(bp_match([[node_a, br_a], [node_a, br_b]]))
+      node_a_list.each do |node_a|
+        expect(node_a.to).to eq(bp_match([[node_b, br_a],
+                                          [node_c, br_b]]))
+        expect(node_a.from).to eq([])
+      end
+
+      # Node B
+      # In this case the branch suggests it can be duplicated but node_b is removed
+      # in branch b so it is not duplicated.  Have it check? or feature bloat
+      expect { node_b.to }.to raise_error(BranchContextError, /^Object Duplicated/)
+      node_b_list = Node.where(name: 'Node B').all
+      expect(node_b_list).to eq(bp_match([[node_b, br_a]]))
+      expect(node_b_list.first.to).to eq([])
+      expect(node_b_list.first.from).to eq(node_a_list)
+
+      # Node C
+      expect(node_c.to).to eq([])
+      expect(node_c.from).to eq(node_a_list)
+
+      # Modify
+      expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
+      node_a_a, node_a_b = node_a_list.sort_by { |n| n.branch_path }
+      expect(node_a_a.context).to eq(Branch.current)
+      node_a_a_new = node_a_a.create(name: 'Node A v2')
+
+      node_a_list = Node.where(record_id: node_a.record_id).all
+      expect(node_a_list).to eq([node_a_a_new, node_a_b])
+    end
   end
 
 end

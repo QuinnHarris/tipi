@@ -62,40 +62,40 @@ module Versioned
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private
-    def self.dataset_from_branch(branch_context_dataset, allow_deleted = nil)
+    def self.dataset_from_context(context, allow_deleted = nil)
       # !!! Duplicated in node/edge code, make part of branch ds?
-      ds = raw_dataset.join(branch_context_dataset,
-                            :branch_id => :branch_id) do |j ,lj, js|
-        Sequel.expr(Sequel.qualify(j, :version) => nil) |
-          (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
+      context.dataset do |branch_context_dataset|
+        ds = raw_dataset.join(branch_context_dataset,
+                              :branch_id => :branch_id) do |j ,lj, js|
+          Sequel.expr(Sequel.qualify(j, :version) => nil) |
+            (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
+        end
+        
+        branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
+          .pg_array.concat(Sequel.qualify(table_name, :branch_path) )
+        
+        ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
+                       branch_path_select.as(:branch_path),
+                       Sequel.function(:rank)
+                         .over(:partition => [:record_id, branch_path_select],
+                               :order => [:depth, Sequel.qualify(table_name, :version).desc] ) )
+        
+        # Use original dataset if single table inheritance is used
+        ds = (@sti_dataset || raw_dataset).from(ds).filter(:rank => 1)
+        ds = ds.filter(:deleted => false) unless allow_deleted
+        ds.select(*columns)
       end
-
-      branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
-        .pg_array.concat(Sequel.qualify(table_name, :branch_path) )
-      
-      ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
-                branch_path_select.as(:branch_path),
-                Sequel.function(:rank)
-                  .over(:partition => [:record_id, branch_path_select],
-                        :order => [:depth, Sequel.qualify(table_name, :version).desc] ) )
-                
-      # Use original dataset if single table inheritance is used
-      ds = (@sti_dataset || raw_dataset).from(ds).filter(:rank => 1)
-      ds = ds.filter(:deleted => false) unless allow_deleted
-      ds.select(*columns)
     end
     public
     
-    # Kludgy: change dataset if in a context but only provide new behavoir once as dataset_from_branch and methods it calls will call dataset again.
+    # Kludgy: change dataset if in a context but only provide new behavoir once as dataset_from_context and methods it calls will call dataset again.
     # There is probably a better way
     self.singleton_class.send(:alias_method, :raw_dataset, :dataset)
     def self.dataset(branch = nil, allow_deleted = nil)
       return super() if @in_dataset or (!Branch.in_context? and !branch)
       @in_dataset = true
       context = Branch.get_context(branch)
-#      context.table # Temporary
-      ds = dataset_from_branch(context.dataset, allow_deleted)
-      ds.send("context=", context)
+      ds = dataset_from_context(context, allow_deleted)
       @in_dataset = nil
       ds
     end
@@ -141,8 +141,8 @@ module Versioned
       vals = vals.merge(new_values) # Should only have one context specifier
 
       ctx = BranchContext.new(vals[:context] || vals[:branch] || vals[:branch_id] || Branch.current!)
-      ctx.not_included_or_duplicated!(branch_id, version)
-      ctx.not_included!(context, false)
+      ctx.not_included!(branch_id, version)
+      ctx.not_included_or_duplicated!(context, false)
       # We assume context includes branch_id
 
       vals[:branch_path] = ctx.path_from(context) + vals[:branch_path]
