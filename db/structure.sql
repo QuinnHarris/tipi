@@ -458,4 +458,4 @@ ALTER TABLE ONLY users
 -- PostgreSQL database dump complete
 --
 
-INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');
+INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');

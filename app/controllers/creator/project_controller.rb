@@ -1,8 +1,8 @@
 class Creator::ProjectController < ApplicationController
-  before_action :set_project, only: [:nodes, :new_node]
+  before_action :set_project, only: [:show, :nodes, :new_node]
   private
   def set_project
-    @project = Project.dataset(View.public).where(version: Integer(params[:project_id])).first
+    @project = Project.dataset(View.public).where(version: Integer(params[:project_id] || params[:id])).first
   end
   public
 
@@ -20,7 +20,7 @@ class Creator::ProjectController < ApplicationController
   end
 
   # JSON call to add and remove edges
-  # PUT call with to and from paramater
+  # PUT call with to and from and op paramater
   # creator_project_edge_change_path(project, format: :json)
   def edge_change
     View.public.context do
@@ -57,14 +57,14 @@ class Creator::ProjectController < ApplicationController
       nodes += traverse
       traverse = traverse.map do |node|
         node.to.find_all do |to|
-          edges_json << { from: node.version, to: to.version }
+          edges_json << { v: node.version, u: to.version }
           !nodes.include?(to)
         end
       end.flatten.uniq
     end
 
     @data = {
-      nodes: nodes.map { |n| { id: n.version, name: n.name } },
+      nodes: nodes.map { |n| { id: n.version, value: {  label:  n.name } } },
       edges: edges_json
     }
 

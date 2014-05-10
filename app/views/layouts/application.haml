@@ -6,11 +6,16 @@
     %title= content_for?(:title) ? yield(:title) : 'Tipi'
     %script{src: "http://d3js.org/d3.v3.min.js"}
     %script{src: "http://cpettitt.github.io/project/dagre-d3/latest/dagre-d3.min.js"}
+    = stylesheet_link_tag    "/typicons-font/typicons.min.css" # Typicons in public (not asset)
     = stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true
     = javascript_include_tag "application", "data-turbolinks-track" => true
     = javascript_include_tag "vendor/modernizr"
     = csrf_meta_tags
   %body
+    /[if IE]
+      %div{style: "clear: both; height: 112px; padding:0; position: relative;"}
+        %a{href: "http://www.theie8countdown.com/ie-users-info"}
+          %img{alt: "", border: "0", height: "112", src: "http://www.theie8countdown.com/assets/badge_iecountdown.png", width: "348"}
     %nav.top-bar{data:{"topbar" => ""}}
       %ul.title-area
         %li.name

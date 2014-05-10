@@ -60,7 +60,7 @@ Rails.application.routes.draw do
 
   namespace :creator do
     get :index
-    resources :project, only: [] do
+    resources :project, only: [:show] do
       get :nodes
       put :node_new
       put :edge_change

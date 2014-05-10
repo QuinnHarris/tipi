@@ -7,8 +7,8 @@ default: &default
   adapter: postgresql
   pool: 5
   timeout: 5000
-  username:
-  password:
+  username: <%= RUBY_PLATFORM.include?('win') ? 'tipi' : '' %>
+  password: <%= RUBY_PLATFORM.include?('win') ? 'tipi' : '' %>
   host:
 
 development:
