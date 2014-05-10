@@ -57,14 +57,14 @@ class Creator::ProjectController < ApplicationController
       nodes += traverse
       traverse = traverse.map do |node|
         node.to.find_all do |to|
-          edges_json << { u: node.version, v: to.version }
+          edges_json << { v: node.version, u: to.version }
           !nodes.include?(to)
         end
       end.flatten.uniq
     end
 
     @data = {
-      nodes: nodes.map { |n| { id: n.version, value: n.name } },
+      nodes: nodes.map { |n| { id: n.version, value: {  label:  n.name } } },
       edges: edges_json
     }
 

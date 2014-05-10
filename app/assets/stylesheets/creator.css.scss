@@ -11,7 +11,7 @@ svg {
 
 text {
   font-weight: 300;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serf;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 14px;
 }
 
@@ -54,13 +54,17 @@ label {
   border-size: border-box;
   border: 1px solid black;
   margin: 1em auto;
-  background: lightblue;
+  background-color: aliceblue;
+  
+  .backdrop{
+    
+  }
 }
 
 .node-outer{
   width:auto;
   background: linear-gradient(135deg, rgba(255,235,232,1) 0%, rgba(255,235,232,1) 9%, rgba(154,156,171,1) 39%, rgba(94,165,191,1) 69%, rgba(117,97,87,1) 100%);
-filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffebe8', endColorstr='#756157', GradientType=1 );
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffebe8', endColorstr='#756157', GradientType=1 );
   display: -webkit-box;
   display: -moz-box;
   display: -ms-flexbox;
@@ -83,12 +87,8 @@ filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffebe8', end
 .node-subtitle{
   font-size:.8em;
 }
-.node-in{
-  height:.7em;
-  cursor: crosshair;
-}
-.node-out{
-  height:1em;
+.node-menu{
+  height:2em;
   margin:.5em;
   cursor: crosshair;
 }
@@ -96,4 +96,9 @@ filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffebe8', end
   stroke: #999;
   stroke-width: 5;
   pointer-events: none;
+}
+
+.context-menu-item{
+  border: 1px solid;
+  background: lightblue;
 }
