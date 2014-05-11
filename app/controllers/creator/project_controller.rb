@@ -1,5 +1,5 @@
 class Creator::ProjectController < ApplicationController
-  before_action :set_project, only: [:node_new, :edge_change, :nodes]
+  before_action :set_project, only: [:node_new, :edge_change, :nodes, :read]
   private
   def set_project
     project = Project.dataset(ViewBranch.public).where(version: Integer(params[:project_id] || params[:id])).first
@@ -49,35 +49,119 @@ class Creator::ProjectController < ApplicationController
   # or should we use a single json input interface to modify nodes?
   
   # creator_project_nodes_path(project, format: :json) 
-  def nodes
-    nodes = []
-    edges_json = []
+  def get_data
+    @nodes = []
+    @edges = []
 
-    traverse = @project.to
-    until traverse.empty?
-      nodes += traverse
-      traverse = traverse.map do |node|
-        node.to.find_all do |to|
-          edges_json << { v: node.version, u: to.version }
-          !nodes.include?(to)
+    @project.context do
+      traverse = @project.to
+      until traverse.empty?
+        @nodes += traverse
+        traverse = traverse.map do |node|
+          node.to.find_all do |to|
+            @edges << { v: node.version, u: to.version }
+            !@nodes.include?(to)
         end
-      end.flatten.uniq
-    end
+        end.flatten.uniq
+      end
 
-    @data = {
-      nodes: nodes.map { |n| { id: n.version, value: {  label:  n.name } } },
-      edges: edges_json
+      # Get unassociated nodes
+      @nodes += Node.exclude(:version => @nodes.map(&:version)).exclude(:type => 'Project').all
+    end
+  end
+
+  def nodes
+    get_data
+      
+    data = {
+      nodes: @nodes.map { |n| { id: n.version, value: {  label:  n.name } } },
+      edges: @edges
     }
 
     respond_to do |format|
-      format.xml  { render  :xml => @data }
-      format.json { render :json => @data }
+      format.xml  { render  :xml => data }
+      format.json { render :json => data }
+    end
+  end
+
+  # Suggested new interface with just read GET request to fetch data
+  # and write POST request to write data.  Could be replaced with WebSocket in the future
+  # Message Format
+  #   type: Type of object (node or edge)
+  #     op: Operation on object (add or remove)
+  # If type is node
+  #     id: Unique identifier for object
+  #   name: Name of node
+  #   More to come as needed
+  # If type is edge
+  #    u,v: Refers to id of node
+  def read
+    get_data
+
+    data = []
+    data += @nodes.map { |n| { type: :node, op: :add, id: n.version, name: n.name } }
+    data += @edges.map { |h| { type: :node, op: :add }.merge(h) }
+
+    respond_to do |format|
+      format.xml  { render  :xml => data }
+      format.json { render :json => data }
+    end
+  end 
+
+  # Pass json string in data parameter
+  # Untested
+  def write
+    data = ActiveSupport.JSON.decode(params[:data])
+    raise "Expected Array" unless data.is_a?(Array)
+    response = []
+    @project.context do
+      data.each do |hash|
+        type, op = %w(type op).map do |k|
+          v = hash.delete(k)
+          raise "Expected #{k}" unless k
+          k.downcase
+        end
+
+        raise "Expected op to be add or remove" unless %w(add remove).included?(op)
+        
+        resp = { type: type, op: op }
+        
+        case type
+        when 'node'
+          name = hash.delete('name')
+          raise "Expected name" unless name
+          
+          if op == 'add'
+            node = Node.create(name: name)
+            response << resp.merge(id: node.id, name: name) 
+          else # remove
+            id = hash.delete('id')
+            raise "Expected id" unless id
+            node = Node.where(version: Integer(id)).first
+            node.delete
+          end
+          
+        when 'edge'
+          to, from = ['u', 'v'].map do |k|
+            Node.where(version: Integer(hash.delete(a))).first
+          end
+          
+          from.send("#{op}_to", to)
+          response << resp.merge(u: to, v: from)
+        else
+          raise "Expected type to be Node or Edge"
+        end      
+      end
+    end
+
+    respond_to do |format|
+      format.json { render :json => response }
     end
   end
 
   def clone
-    Node.db.transaction do
-      project = Project.dataset(ViewBranch.public).where(version: Integer(params[:project_id] || params[:id])).first
+    ViewBranch.public.context do
+      project = Project.where(version: Integer(params[:project_id] || params[:id])).first
       new_project = project.clone(name: project.name + "+")
     end
 

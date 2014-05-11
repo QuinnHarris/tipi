@@ -64,6 +64,10 @@ Rails.application.routes.draw do
       get :nodes
       put :node_new
       put :edge_change
+
+      get :read
+      put :write
+
       put :clone
     end
   end
