@@ -43,9 +43,8 @@ class Node < Sequel::Model
     :select => nil, # Don't override our select statements
     :dataset =>
       (proc do |r|
-         ctx = Branch.get_context(Branch.current! || context)
-         ctx.not_included_or_duplicated!(context, false)
-         ctx.dataset do |branch_context_data|
+         current_context.not_included_or_duplicated!(context, false)
+         current_context.dataset do |branch_context_data|
            dataset = r.associated_class.raw_dataset
            
            # Assuming this node is the latest in the current branch context
@@ -99,7 +98,7 @@ class Node < Sequel::Model
        end)
 
     define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
-      ctx = Branch.get_context(branch || Branch.current! || context, false)
+      ctx = BranchContext.get(branch || BranchContext.current! || context, false)
       
       ctx.not_included!(self)
       ctx.not_included!(node)
@@ -125,7 +124,30 @@ class Node < Sequel::Model
 end
 
 class Project < Node
+  def clone(opts = {})
+    raise "Expected view context" unless context.branch.is_a?(ViewBranch)
+    raise "Expected one from: #{from.inspect}" unless from.length == 1
+    category = from.first
+    raise "Expected category: #{category.inspect}" unless category.is_a?(Category)
 
+    o = self.with_this_context
+    raise "Expected ProjectBranch: #{context.inspect}" unless o.context.branch.is_a?(ProjectBranch)
+    db.transaction do
+      br = o.context.branch.fork(name: opts[:name]) do
+        o = o.create(opts)
+      end
+      br.add_successor(context.branch)
+
+      context.reset! # This should be automatic
+
+      # o has different branch path in view context
+      o = o.dup
+      o.branch_path = [br.id]
+
+      category.add_to(o)
+    end
+    o
+  end
 end
 
 class Step < Node
@@ -137,7 +159,7 @@ class Category < Node
   def self.root
     # Must duplicate for each call so the BranchContext isn't cached
 #    return @@root.dup if class_variable_defined?('@@root')
-    @@root = dataset(View.public).where(version: 1).first!
+    @@root = dataset(ViewBranch.public).where(version: 1).first!
   end
 
   alias_method :children, :to
@@ -155,7 +177,7 @@ class Category < Node
 
   def add_child(values)
     self.class.db.transaction do
-      child = Category.create(values.merge(:context => context))
+      child = self.class.create(values.merge(:context => context))
       add_to(child)
     end
   end
@@ -174,11 +196,17 @@ class Category < Node
     cur
   end
 
+  # Add a project node with its own branch
   def add_project(name)
     # Need better way to request specific types
     project = from_dataset.where(type: 'Project', name: name).first
     raise "Project Exists: #{name}" if project
-    project = Project.create(name: name)
+    raise "Expected to be in View context" unless current_context!.branch.is_a?(ViewBranch)
+    current_context.branch.subordinate(name: name,
+                                       class: ProjectBranch) do
+      project = Project.create(name: name)
+      yield project if block_given?
+    end
     add_to(project)
     project
   end

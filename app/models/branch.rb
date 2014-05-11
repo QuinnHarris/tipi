@@ -38,12 +38,22 @@ class BranchContext
   
   def table
     return @table if @table
-    @table = branch.create_context_table(version)
+    @table = "branch_decend_#{id}#{version && "_#{version}"}".to_sym
+    ds = branch.context_dataset(version)
+    Branch.db.drop_table? @table #unless self.class.in_context?
+    Branch.db.create_table @table, :temp => true, :as => ds, :on_commit => self.class.current! && :drop
+    @table
   end
   
   def data
     return @data if @data
     @data = Branch.db[table].all
+  end
+
+  def reset!
+    Branch.db.drop_table? @table if @table
+    @table = nil
+    @data = nil
   end
   
   # Returns dataset or table if exists
@@ -65,6 +75,55 @@ class BranchContext
     end
   end
 
+  # Context Stack
+  @@context_stack = []
+
+  def self.current!
+    @@context_stack.last
+  end
+
+  def self.current
+    raise BranchContextError, "No current context" if @@context_stack.empty?
+    current!
+  end
+
+  # Get a BranchContext for the specified branch or use the current context
+  # if false is specified for version, raise exception if the context has a version lock
+  # this is needed for anything that modifies the database
+  def self.get(branch = nil, version = nil)
+    if branch
+      ctx = self.new(branch, version ? version : nil)
+      current!.not_included!(ctx) if current!
+    else
+      ctx = current
+    end
+
+    if version == false and ctx.version
+      raise BranchContextError, "Context without version required"
+    end
+
+    ctx
+  end
+
+  def apply(opts = {})
+    return self unless block_given?
+    begin
+      Branch.db.transaction(opts) do
+        @@context_stack.push(self)
+        table # Generate context table
+        
+        yield branch
+      end
+    ensure
+      raise "WTF" if self != @@context_stack.last
+      table_clear! # !!!Remove table reference incase droped when transaction is complete.  Fix this
+      @@context_stack.pop
+    end
+    self
+  end
+
+
+  # Infomation and checking methods
   private
   def id_version(ctx, sub_version = nil)
     if ctx.is_a?(BranchContext)
@@ -192,7 +251,9 @@ class Branch < Sequel::Model
   def self.create(values = {}, &block)
     if block_given?
       db.transaction do
-        context(super(values, &nil), {}, &block)
+        o = super(values, &nil)
+        o.context(&block)
+        o
       end
     else
       super values
@@ -202,10 +263,13 @@ class Branch < Sequel::Model
   # Create new successor branch from current branch with option context block
   def fork(options = {}, &block)
     version = options.delete(:version_lock)
+    klass = options.delete(:class) || self.class
+    raise "Must be Branch class: #{klass}" unless klass <= Branch
     db.transaction do
-      o = self.class.create(options)
+      o = klass.create(options)
       add_successor(o, version)
-      self.class.context(o, {}, &block)
+      o.context(&block)
+      o
     end
   end
 
@@ -221,7 +285,20 @@ class Branch < Sequel::Model
       [args].flatten.each do |p|
         p.add_successor(o, version)
       end
-      context(o, {}, &block)
+      o.context(&block)
+      o
+    end
+  end
+
+  def subordinate(options, &block)
+    klass = options.delete(:class) || self.class
+    raise "Must be Branch class: #{klass}" unless klass <= Branch
+    BranchContext.current.reset! if BranchContext.current! # Should make this more efficient, NEEDS PROPER TEST
+    db.transaction do
+      o = klass.create(options)
+      add_predecessor(o)
+      o.context(&block)
+      o
     end
   end
 
@@ -273,77 +350,20 @@ class Branch < Sequel::Model
     db[cte_table].with_recursive(cte_table, base_ds, recursive_ds)
   end
 
-  def create_context_table(version = nil)
-    table_name = "branch_decend_#{id}#{version && "_#{version}"}".to_sym
-    ds = context_dataset(version)
-    db.drop_table? table_name #unless self.class.in_context?
-    db.create_table table_name, :temp => true, :as => ds, :on_commit => self.class.in_context? && :drop
-    table_name
-  end
-
-  @@context_list = []
-
-  def self.in_context?
-    @@context_list.empty? ? nil : true
-  end
-
-  def self.current!
-    @@context_list.last
-  end
-
-  def self.current
-    raise BranchContextError, "No current context" if @@context_list.empty?
-    current!
-  end
-
-  # Get a BranchContext for the specified branch or use the current context
-  # if false is specified for version, raise exception if the context has a version lock
-  # this is needed for anything that modifies the database
-  def self.get_context(branch = nil, version = nil)
-    if branch
-      ctx = BranchContext.new(branch, version)
-      Branch.current!.not_included!(ctx) if in_context?
-    else
-      ctx = Branch.current
-    end
-
-    if version == false and ctx.version
-      raise BranchContextError, "Context without version required"
-    end
-
-    ctx
-  end
-
-
   def context(opts=OPTS, &block)
     self.class.context(self, opts, &block)
   end
 
-  def self.context(branch, opts=OPTS)
-    return branch unless block_given?
-    version = opts[:version]
-    version = version.version if version and !version.is_a?(Integer)
-
-    cur = BranchContext.new(branch, version)
-    current!.not_included!(cur) if current!
-
-    begin
-      db.transaction(opts) do
-        @@context_list.push(cur)
-        cur.table # Generate context table
-        
-        yield branch
-      end
-    ensure
-      raise "WTF" if cur != @@context_list.last
-      cur.table_clear! # !!!Remove table reference incase droped when transaction is complete.  Fix this
-      @@context_list.pop
-    end
-    branch
+  def self.context(branch, opts=OPTS, &block)
+    BranchContext.get(branch, opts[:version]).apply(opts, &block)
   end
 end
 
-class View < Branch
+class ProjectBranch < Branch
+  
+end
+
+class ViewBranch < Branch
   def self.public
     return @@public.dup if class_variable_defined?('@@public')
     @@public = where(id: 1).first!

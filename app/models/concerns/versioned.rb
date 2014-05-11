@@ -1,3 +1,5 @@
+Branch
+
 module DatasetBranchContext
   attr_reader :context
   private
@@ -53,11 +55,29 @@ module Versioned
     #, :branch_path]
 
     dataset_module DatasetBranchContext
-    attr_reader :context
+    def context(&block)
+      @context.apply(&block)
+    end
+
+    def with_this_context
+      return self if context.id == branch_id
+      o = dup
+      o.send("context=", BranchContext.get(branch_id, false))
+      o.freeze
+      o
+    end
     private
     attr_writer :context
     attr_writer :previous
+
+    def current_context(branch = nil, version = nil)
+      BranchContext.get(branch || BranchContext.current! || context, version)
+    end
+    def current_context!(branch = nil)
+      current_context(branch, false)
+    end
     public
+
 
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
@@ -92,9 +112,9 @@ module Versioned
     # There is probably a better way
     self.singleton_class.send(:alias_method, :raw_dataset, :dataset)
     def self.dataset(branch = nil, allow_deleted = nil)
-      return super() if @in_dataset or (!Branch.in_context? and !branch)
+      return super() if @in_dataset or (!BranchContext.current! and !branch)
       @in_dataset = true
-      context = Branch.get_context(branch)
+      context = BranchContext.get(branch)
       ds = dataset_from_context(context, allow_deleted)
       @in_dataset = nil
       ds
@@ -119,7 +139,7 @@ module Versioned
       raise "Can't specify record_id" if values[:record_id]
       raise "Can't specify version" if values[:version]
 
-      @context = Branch.get_context(check_context_specifier(values), false)
+      @context = BranchContext.get(check_context_specifier(values), false)
 
       values.delete(:context)
       values[:branch] = @context.branch_nil
@@ -134,13 +154,13 @@ module Versioned
       raise "Expected context" unless context
 
       unless check_context_specifier(new_values)
-        vals[:context] = context unless Branch.in_context?
+        vals[:context] = context unless BranchContext.current!
       end
       record_id = vals.delete(:record_id) # Remove record_id to make initialize happy
       [:version, :branch_id, :created_at].each { |column| vals.delete(column) }
       vals = vals.merge(new_values) # Should only have one context specifier
 
-      ctx = BranchContext.new(vals[:context] || vals[:branch] || vals[:branch_id] || Branch.current!)
+      ctx = BranchContext.new(vals[:context] || vals[:branch] || vals[:branch_id] || BranchContext.current!)
       ctx.not_included!(branch_id, version)
       ctx.not_included_or_duplicated!(context, false)
       # We assume context includes branch_id

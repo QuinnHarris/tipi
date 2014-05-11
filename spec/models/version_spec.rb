@@ -58,7 +58,7 @@ describe Branch do
     br_c = br_b.fork(name: 'Branch C', version_lock: true) do
       expect(Node.all).to match_array([node_a, node_b])
       node_a_del = node_a.delete
-      expect(node_a_del.context).to eq(Branch.current)
+      expect(node_a_del.context).to eq(BranchContext.current)
       expect(Node.all).to match_array([node_b])
 
       expect { br_a.context { } }.to raise_error(BranchContextError, /^Branch found.+but/)
@@ -184,7 +184,7 @@ describe Branch do
       # Modify
       expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_a_a, node_a_b = node_a_list.sort_by { |n| n.branch_path }
-      expect(node_a_a.context).to eq(Branch.current)
+      expect(node_a_a.context).to eq(BranchContext.current)
       node_a_a_new = node_a_a.create(name: 'Node A v2')
 
       node_a_list = Node.where(record_id: node_a.record_id).all

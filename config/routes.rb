@@ -64,6 +64,7 @@ Rails.application.routes.draw do
       get :nodes
       put :node_new
       put :edge_change
+      put :clone
     end
   end
 

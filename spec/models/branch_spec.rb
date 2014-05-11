@@ -34,26 +34,26 @@ describe Branch do
       end
       expect { other.add_successor(@branch) }.to raise_error(Sequel::DatabaseError, /cycle found/)
     end
-    
-    it "can fork and merge" do
-      left = @branch.fork(name: 'Left')
-      expect(left).to be_an_instance_of(Branch)
-
-      right = @branch.fork(name: 'Right')
-      expect(right).to be_an_instance_of(Branch)
-
-      merge = Branch.merge(left, right, name: 'Merge')
-      expect(merge).to be_an_instance_of(Branch)
-
-      list = merge.context_dataset.all
-      expect(list.map { |e| e[:branch_id] }.uniq.sort
-             ).to eq([@branch,left,right,merge].map { |e| e[:id] }.sort)
-    end
-
-    # Keep all above as is until all existing tests pass
   end
 
-  it "can fork and merge 2" do
+  def traverse(branch, successor_id = nil, depth = 0, version = nil, bp = [])
+    list = branch.predecessor_relations.map do |pred|
+      traverse(pred.predecessor,
+               branch.id,
+               depth+1,
+               [version, pred.version].compact.min,
+               (branch.predecessor_relations.length > 1) ?
+               (bp + [pred.predecessor_id]) : bp)
+    end.flatten
+    [{   branch_id: branch.id,
+       successor_id: successor_id,
+       version: version,
+       depth: depth,
+       branch_path: bp
+     }] + list
+  end
+
+  it "can fork, merge and subordinate" do
     list =
       [
        root = Branch.create(name: 'Root'),
@@ -61,27 +61,11 @@ describe Branch do
        right = root.fork(name: 'Right', version_lock: true),
        merge = Branch.merge(left, right, name: 'Merge'),
        lock = merge.fork(name: 'Lock', version_lock: true),
-       mega_merge = Branch.merge(lock, merge, right, left, root, name: 'Mega Merge')
+       mega_merge = Branch.merge(lock, merge, right, left, root, name: 'Mega Merge'),
+       lock.subordinate(name: 'Subordinate')
       ]
     
     list.each { |b| expect(b).to be_an_instance_of(Branch) }
-
-    def traverse(branch, successor_id = nil, depth = 0, version = nil, bp = [])
-      list = branch.predecessor_relations.map do |pred|
-        traverse(pred.predecessor,
-                 branch.id,
-                 depth+1,
-                 [version, pred.version].compact.min,
-                 (branch.predecessor_relations.length > 1) ?
-                 (bp + [pred.predecessor_id]) : bp)
-      end.flatten
-      [{   branch_id: branch.id,
-        successor_id: successor_id,
-             version: version,
-               depth: depth,
-         branch_path: bp
-      }] + list
-    end
 
     list.each do |branch|
       rows = branch.context_dataset.all

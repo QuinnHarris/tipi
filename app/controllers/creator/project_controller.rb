@@ -1,8 +1,9 @@
 class Creator::ProjectController < ApplicationController
-  before_action :set_project, only: [:show, :nodes, :new_node]
+  before_action :set_project, only: [:node_new, :edge_change, :nodes]
   private
   def set_project
-    @project = Project.dataset(View.public).where(version: Integer(params[:project_id] || params[:id])).first
+    project = Project.dataset(ViewBranch.public).where(version: Integer(params[:project_id] || params[:id])).first
+    @project = project.with_this_context # All operations in the branch of this project
   end
   public
 
@@ -11,7 +12,7 @@ class Creator::ProjectController < ApplicationController
   # returns id and name
   # creator_project_node_new_path(project, format: :json)
   def node_new
-    View.public.context do
+    @project.context do
       @node = @project.add_to(Node.create(name: params[:name]))
     end
     respond_to do |format|
@@ -23,7 +24,7 @@ class Creator::ProjectController < ApplicationController
   # PUT call with to and from and op paramater
   # creator_project_edge_change_path(project, format: :json)
   def edge_change
-    View.public.context do
+    @project.context do
       @to, @from = [:to, :from].map do |k|
         Node.where(version: Integer(params[k])).first
       end
@@ -72,5 +73,14 @@ class Creator::ProjectController < ApplicationController
       format.xml  { render  :xml => @data }
       format.json { render :json => @data }
     end
+  end
+
+  def clone
+    Node.db.transaction do
+      project = Project.dataset(ViewBranch.public).where(version: Integer(params[:project_id] || params[:id])).first
+      new_project = project.clone(name: project.name + "+")
+    end
+
+    redirect_to creator_project_nodes_url, notice: 'Project was successfully cloned.'
   end
 end
