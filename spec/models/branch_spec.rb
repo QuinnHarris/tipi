@@ -36,16 +36,19 @@ describe Branch do
     end
   end
 
-  def traverse(branch, successor_id = nil, depth = 0, version = nil, bp = [])
+  def traverse(branch, successor_id = nil, depth = 0, version = nil, merge_point = false, bp = [])
     list = branch.predecessor_relations.map do |pred|
+      merge_point = ((branch.predecessor_relations.length > 1) | branch.merge_point)
       traverse(pred.predecessor,
                branch.id,
                depth+1,
                [version, pred.version].compact.min,
-               (branch.predecessor_relations.length > 1) ?
+               merge_point,
+               merge_point ?
                (bp + [pred.predecessor_id]) : bp)
     end.flatten
-    [{   branch_id: branch.id,
+    [{ branch_id: branch.id,
+       name: branch.name,
        successor_id: successor_id,
        version: version,
        depth: depth,

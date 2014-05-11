@@ -63,6 +63,8 @@ Sequel.migration do
       String        :name,        null: false
       String        :description, text: true
 
+      Boolean	    :merge_point
+
       DateTime      :created_at,  null: false
       DateTime      :updated_at
     end

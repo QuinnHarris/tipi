@@ -50,17 +50,11 @@ class Node < Sequel::Model
            # Assuming this node is the latest in the current branch context
            edge_dst_path = Sequel.pg_array(:"#{opposite}_branch_path")
            ds = dataset.join(r[:join_table],
-                             { :"#{opposite}_record_id" => :record_id,
-                               Sequel.qualify(:nodes,
-                                              :branch_path)
-                                 .pg_array[ExRange.new(1, Sequel.function(:coalesce,
-                                                                          edge_dst_path.length,
-                                                                          0))] =>
-                               edge_dst_path }
-                             )
+                             :"#{opposite}_record_id" => :record_id)
+           # Exclude based on branch_path later as it needs to be concatentad with branch table
            
            edge_src_path = Sequel.pg_array(:"#{aspect}_branch_path")
-           this_branch_path = Sequel.pg_array_op(branch_path)
+           this_branch_path = Sequel.pg_array_op(branch_path) # Already concatenated with branch table
            ds = ds.where(:"#{aspect}_record_id" => record_id,
                          this_branch_path[ExRange.new(1, Sequel.function(:coalesce,
                                                                          edge_src_path.length,
@@ -84,6 +78,7 @@ class Node < Sequel::Model
            ds = ds.select(*(r.associated_class.columns - [:branch_path]).map do |n|
                             Sequel.qualify(:nodes, n) end,
                           branch_path_select.as(:branch_path),
+                          edge_dst_path,
                           Sequel.as(Sequel.qualify(r[:join_table], :deleted),
                                     :join_deleted),
                           Sequel.function(:rank)
@@ -92,8 +87,15 @@ class Node < Sequel::Model
                                     [Sequel.qualify("branch_#{t}", :depth), 
                                      Sequel.qualify(t, :version).desc]
                                   end.flatten ) )
-           
-           dataset.from(ds).filter(:rank => 1, :deleted => false, :join_deleted => false).select(*r.associated_class.columns)
+
+           dataset.from(ds)
+             .where(:rank => 1, :deleted => false, :join_deleted => false,
+                    Sequel.pg_array(:branch_path)[ExRange.new(1, Sequel.function(:coalesce,
+                                                                                 edge_dst_path.length,
+                                                                                 0))] =>
+                    edge_dst_path
+                    )
+             .select(*r.associated_class.columns)
          end
        end)
 
@@ -202,11 +204,14 @@ class Category < Node
     project = from_dataset.where(type: 'Project', name: name).first
     raise "Project Exists: #{name}" if project
     raise "Expected to be in View context" unless current_context!.branch.is_a?(ViewBranch)
-    current_context.branch.subordinate(name: name,
+    br = current_context.branch.subordinate(name: name,
                                        class: ProjectBranch) do
       project = Project.create(name: name)
       yield project if block_given?
     end
+    # Kludge to set path correctly !!! NEED TO FIX
+    project = project.dup
+    project.branch_path = [br.id]
     add_to(project)
     project
   end

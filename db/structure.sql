@@ -90,6 +90,7 @@ CREATE TABLE branches (
     type text NOT NULL,
     name text NOT NULL,
     description text,
+    merge_point boolean,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone
 );

@@ -295,6 +295,9 @@ class Branch < Sequel::Model
     raise "Must be Branch class: #{klass}" unless klass <= Branch
     BranchContext.current.reset! if BranchContext.current! # Should make this more efficient, NEEDS PROPER TEST
     db.transaction do
+      if (merge_point == false) and !predecessors.empty?
+        raise "Merge not allowed on this branch #{merge_point.inspect}"
+      end
       o = klass.create(options)
       add_predecessor(o)
       o.context(&block)
@@ -308,46 +311,57 @@ class Branch < Sequel::Model
 
   # Return dataset with this and all predecessor branch ids and maximum version number for that branch
   def context_dataset(version = nil)
-    self.class.context_dataset(id, version)
+    self.class.context_dataset(id, name, merge_point, version)
   end
 
-  def self.context_dataset(branch_id, version = nil)
+  def self.context_dataset(branch_id, name, merge_point, version = nil)
     connect_table = :branch_relations
     cte_table = :branch_decend
 
     # Select this record as the start point of the recursive query
     # Include the version (or null) column used by recursive part
     base_ds = db[].select(Sequel.as(branch_id, :branch_id),
+                          Sequel.as(name, :name),
                           Sequel.cast(nil, :integer).as(:successor_id),
                           Sequel.cast(version, :bigint).as(:version),
                           Sequel.as(0, :depth),
-                          Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_path) )
+                          Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_path),
+                          Sequel.as(merge_point || false, :merge_point) )
     
     # Connect from the working set (cte_table) through the connect_table back to this table
     # Use the least (lowest) version number from the current version or the connect_table version
     # This ensures the version column on the connect_table retrieves in all objects at or below that version
     recursive_ds =
       db.from(
-              db.from(connect_table)
-                .join(cte_table, [[:branch_id, :successor_id]])
-                .select(Sequel.as(:predecessor_id, :branch_id),
+              db.from(cte_table)
+                .join(connect_table, [[:successor_id, :branch_id]])
+                .join(table_name, [[:id, :predecessor_id]])
+                .select(Sequel.as(:id, :branch_id),
+                        Sequel.qualify(table_name, :name),
                         Sequel.qualify(connect_table, :successor_id),
                         Sequel.function(:LEAST,*[connect_table, cte_table].map { |t|
                                           Sequel.qualify(t, :version) })
                           .as(:version),
                         Sequel.+(:depth, 1).as(:depth),
                         :branch_path,
+                        Sequel.qualify(cte_table, :merge_point).as(:merge_siblings),
+                        Sequel.function(:coalesce,
+                                        Sequel.qualify(table_name, :merge_point),
+                                        false).as(:merge_point),
                         Sequel.function(:count).*
                           .over(:partition => Sequel.qualify(connect_table, :successor_id))
-                          .as(:count)
+                          .as(:count),
                         ) )
-      .select(:branch_id, :successor_id, :version, :depth,
-              Sequel.case([[Sequel.expr(:count) > 1,
+      .select(:branch_id, :name, :successor_id, :version, :depth,
+              Sequel.case([[(Sequel.expr(:count) > 1) | 
+                            Sequel.expr(:merge_siblings),
                             Sequel.pg_array(:branch_path)
                               .concat(:branch_id) ]],
-                          :branch_path) )
+                          :branch_path),
+              :merge_point)
     
     db[cte_table].with_recursive(cte_table, base_ds, recursive_ds)
+      .select(:branch_id, :name, :successor_id, :version, :depth, :branch_path)
   end
 
   def context(opts=OPTS, &block)
@@ -364,6 +378,10 @@ class ProjectBranch < Branch
 end
 
 class ViewBranch < Branch
+  def initialize(values = {})
+    super({ :merge_point => true }.merge(values))
+  end
+
   def self.public
     return @@public.dup if class_variable_defined?('@@public')
     @@public = where(id: 1).first!
