@@ -1,11 +1,58 @@
-class Creator::ProjectController < ApplicationController
-  before_action :set_project, only: [:node_new, :edge_change, :nodes, :read]
+class ProjectsController < ApplicationController
+  def index
+
+  end
+
+  def new
+    @category = Category.where(version: params[:category]).first
+    @project = Project.new(branch: ViewBranch.public)
+  end
+
+  def create
+    ViewBranch.public.context do
+      category = Category.where(version: params[:category][:version]).first
+      @project = category.add_project(params[:project])
+    end
+
+    redirect_to project_path(@project), notice: 'Category was successfully created.'
+  end
+
+  before_action :set_project, except: [:index, :new, :create, :branch, :write]
   private
   def set_project
-    project = Project.dataset(ViewBranch.public).where(version: Integer(params[:project_id] || params[:id])).first
+    project = Project.dataset(ViewBranch.public).where(version: Integer(params[:id])).first
     @project = project.with_this_context # All operations in the branch of this project
   end
   public
+
+  def edit
+    @project = @project.new
+  end
+
+  def update
+    @project = @project.with_this_context
+    if @project.create(params[:project])
+      redirect_to categories_url, notice: 'Project was successfully updated.'
+    else
+      render :edit
+    end
+  end
+
+  def clone
+    @project = @project.new
+  end
+
+  def branch
+    project = Project.dataset(ViewBranch.public).where(version: Integer(params[:id])).first
+    new_project = project.clone(params[:project])
+
+    redirect_to project_path(project), notice: 'Project was successfully cloned.'
+  end
+
+  def destroy
+    @project.delete
+    redirect_to categories_url, notice: 'Project was successfully deleted'
+  end
 
   # JSON call to create a new node
   # PUT call with name paramater
@@ -95,16 +142,18 @@ class Creator::ProjectController < ApplicationController
   #   More to come as needed
   # If type is edge
   #    u,v: Refers to id of node
-  def read
-    get_data
-
-    data = []
-    data += @nodes.map { |n| { type: :node, op: :add, id: n.version, name: n.name } }
-    data += @edges.map { |h| { type: :node, op: :add }.merge(h) }
-
+  def show
     respond_to do |format|
-      format.xml  { render  :xml => data }
-      format.json { render :json => data }
+      format.html {  }
+      format.json do
+        get_data
+        
+        data = []
+        data += @nodes.map { |n| { type: :node, op: :add, id: n.version, name: n.name } }
+        data += @edges.map { |h| { type: :node, op: :add }.merge(h) }
+        
+        render :json => data
+      end
     end
   end 
 
@@ -157,14 +206,5 @@ class Creator::ProjectController < ApplicationController
     respond_to do |format|
       format.json { render :json => response }
     end
-  end
-
-  def clone
-    ViewBranch.public.context do
-      project = Project.where(version: Integer(params[:project_id] || params[:id])).first
-      new_project = project.clone(name: project.name + "+")
-    end
-
-    redirect_to creator_project_nodes_url, notice: 'Project was successfully cloned.'
   end
 end

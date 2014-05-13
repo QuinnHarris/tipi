@@ -58,17 +58,18 @@ Rails.application.routes.draw do
 
   resources :categories
 
-  namespace :creator do
-    get :index
-    resources :project, only: [:show] do
+  resources :projects do
+    member do
+      get :info
+      
       get :nodes
       put :node_new
       put :edge_change
-
-      get :read
+      
       put :write
-
-      put :clone
+      
+      get :clone
+      post :branch
     end
   end
 

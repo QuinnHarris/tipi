@@ -2,7 +2,9 @@ class CategoriesController < ApplicationController
   # Show all categories
   # GET /categories
   def index
-    @category = Category.root
+    @category = Category.root(params[:version])
+    @prev_version = Node.prev_version(@category.context)
+    @next_version = Node.next_version(@category.context)
   end
 
   # Show all versions of a category

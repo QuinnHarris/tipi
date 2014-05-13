@@ -7,7 +7,7 @@ module DatasetBranchContext
 
   def setup_object(o)
     return o if o.frozen?
-    o.send('context=', context) if context
+    o.send('context=', context) if context and o.respond_to?(:context)
     o.freeze
     o
   end
@@ -62,7 +62,9 @@ module Versioned
     def with_this_context
       return self if context.id == branch_id
       o = dup
-      o.send("context=", BranchContext.get(branch_id, false))
+      ctx = o.send("context=", BranchContext.get(branch_id, context.version))
+      path = context.path_from(ctx)
+      o.branch_path -= path # Should work but doesn't check for problems
       o.freeze
       o
     end
@@ -78,11 +80,10 @@ module Versioned
     end
     public
 
-
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private
-    def self.dataset_from_context(context, allow_deleted = nil)
+    def self.dataset_from_context(context, options = {})
       # !!! Duplicated in node/edge code, make part of branch ds?
       context.dataset do |branch_context_dataset|
         ds = raw_dataset.join(branch_context_dataset,
@@ -95,14 +96,17 @@ module Versioned
           .pg_array.concat(Sequel.qualify(table_name, :branch_path) )
         
         ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
-                       branch_path_select.as(:branch_path),
-                       Sequel.function(:rank)
-                         .over(:partition => [:record_id, branch_path_select],
-                               :order => [:depth, Sequel.qualify(table_name, :version).desc] ) )
+                       branch_path_select.as(:branch_path))
+        
+        next ds if options[:versions]
+
+        ds = ds.select_append(Sequel.function(:rank)
+                                .over(:partition => [:record_id, branch_path_select],
+                                      :order => [:depth, Sequel.qualify(table_name, :version).desc] ) )
         
         # Use original dataset if single table inheritance is used
         ds = (@sti_dataset || raw_dataset).from(ds).filter(:rank => 1)
-        ds = ds.filter(:deleted => false) unless allow_deleted
+        ds = ds.filter(:deleted => false) unless options[:deleted]
         ds.select(*columns)
       end
     end
@@ -111,17 +115,31 @@ module Versioned
     # Kludgy: change dataset if in a context but only provide new behavoir once as dataset_from_context and methods it calls will call dataset again.
     # There is probably a better way
     self.singleton_class.send(:alias_method, :raw_dataset, :dataset)
-    def self.dataset(branch = nil, allow_deleted = nil)
+    def self.dataset(branch = nil, options = {})
       return super() if @in_dataset or (!BranchContext.current! and !branch)
       @in_dataset = true
       context = BranchContext.get(branch)
-      ds = dataset_from_context(context, allow_deleted)
+      ds = dataset_from_context(context, options = {})
       @in_dataset = nil
       ds
     end
 
-    def versions
-      self.class.raw_dataset.where(record_id: record_id).order(:version).reverse.all
+    def versions_dataset(all = false)
+      ds = all ? self.class.raw_dataset : self.class.dataset_from_context(context, versions: true)
+      ds.where(record_id: record_id)
+    end
+    def versions(all = false)
+      versions_dataset(all).order(:version).reverse.all
+    end
+
+    def self.prev_version(context)
+      ds = dataset_from_context(BranchContext.new(context.branch), versions: true)
+      ds = ds.where { |o| o.nodes__version < context.version } if context.version
+      ds.max(Sequel.qualify(:nodes, :version))
+    end
+    def self.next_version(context)
+      return nil unless context.version
+      dataset_from_context(BranchContext.new(context.branch), versions: true).where { |o| o.nodes__version > context.version }.min(Sequel.qualify(:nodes, :version))
     end
 
     private

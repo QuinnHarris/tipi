@@ -1,4 +1,12 @@
 %h1 Categories
 
+Version: 
+= link_to 'Prev', { :version => @prev_version }
+-
+- if @next_version
+  = link_to 'Next', { :version => @next_version }
+
+%hr
+
 %ul
   = render partial: 'category', object: @category

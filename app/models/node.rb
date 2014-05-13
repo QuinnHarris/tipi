@@ -71,14 +71,19 @@ class Node < Sequel::Model
                  (Sequel.qualify(table, :version) <= Sequel.qualify(j, :version))
              end
            end
-           
+
+           # Exclude based on branch_path here
            branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
              .pg_array.concat(Sequel.qualify(:nodes, :branch_path) )
+           ds = ds.where(branch_path_select[ExRange.new(1, Sequel.function(:coalesce,
+                                                                           edge_dst_path.length,
+                                                                           0))] =>
+                         edge_dst_path
+                         )
            
            ds = ds.select(*(r.associated_class.columns - [:branch_path]).map do |n|
                             Sequel.qualify(:nodes, n) end,
                           branch_path_select.as(:branch_path),
-                          edge_dst_path,
                           Sequel.as(Sequel.qualify(r[:join_table], :deleted),
                                     :join_deleted),
                           Sequel.function(:rank)
@@ -89,12 +94,7 @@ class Node < Sequel::Model
                                   end.flatten ) )
 
            dataset.from(ds)
-             .where(:rank => 1, :deleted => false, :join_deleted => false,
-                    Sequel.pg_array(:branch_path)[ExRange.new(1, Sequel.function(:coalesce,
-                                                                                 edge_dst_path.length,
-                                                                                 0))] =>
-                    edge_dst_path
-                    )
+             .where(:rank => 1, :deleted => false, :join_deleted => false)
              .select(*r.associated_class.columns)
          end
        end)
@@ -158,10 +158,10 @@ end
 
 # Categories can only be contained by other categories
 class Category < Node
-  def self.root
+  def self.root(version = nil)
     # Must duplicate for each call so the BranchContext isn't cached
 #    return @@root.dup if class_variable_defined?('@@root')
-    @@root = dataset(ViewBranch.public).where(version: 1).first!
+    @@root = dataset(BranchContext.new(ViewBranch.public, version)).where(version: 1).first!
   end
 
   alias_method :children, :to
@@ -199,14 +199,14 @@ class Category < Node
   end
 
   # Add a project node with its own branch
-  def add_project(name)
+  def add_project(values)
     # Need better way to request specific types
-    project = from_dataset.where(type: 'Project', name: name).first
-    raise "Project Exists: #{name}" if project
+    project = from_dataset.where(type: 'Project', name: values[:name]).first
+    raise "Project Exists: #{values[:name]}" if project
     raise "Expected to be in View context" unless current_context!.branch.is_a?(ViewBranch)
-    br = current_context.branch.subordinate(name: name,
+    br = current_context.branch.subordinate(name: values[:name],
                                        class: ProjectBranch) do
-      project = Project.create(name: name)
+      project = Project.create(values)
       yield project if block_given?
     end
     # Kludge to set path correctly !!! NEED TO FIX

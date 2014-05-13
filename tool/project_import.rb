@@ -59,7 +59,7 @@ data = ActiveSupport::JSON.decode(json_data)
 ViewBranch.public.context do
   category = Category.root.get_path(category_path)
 
-  category.add_project(project_name) do |project|    
+  category.add_project(name: project_name) do |project|    
     node_map = {}
     data['nodes'].each do |node_h|
       id, name = %w(id name).map do |k|

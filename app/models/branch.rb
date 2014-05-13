@@ -189,7 +189,7 @@ class BranchContext
     end
   end
 
-  # Called after not_included_or_deplicated!
+  # Called after not_included_or_duplicated!
   def path_from(ctx)
     sub_id, sub_version = id_version(ctx)
     
