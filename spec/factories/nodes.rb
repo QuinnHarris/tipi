@@ -2,5 +2,16 @@
 
 FactoryGirl.define do
   factory :node do
+
+    factory :node_ajax do
+      type  'node'
+      op    'add'
+      sequence(:name) { |n| "Node #{n}" }
+    end
+  end
+
+
+  factory :project do
+    sequence(:name) { |n| "Project #{n}" }
   end
 end

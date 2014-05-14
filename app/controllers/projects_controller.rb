@@ -97,23 +97,16 @@ class ProjectsController < ApplicationController
   
   # creator_project_nodes_path(project, format: :json) 
   def get_data
-    @nodes = []
     @edges = []
 
     @project.context do
-      traverse = @project.to
-      until traverse.empty?
-        @nodes += traverse
-        traverse = traverse.map do |node|
-          node.to.find_all do |to|
-            @edges << { v: node.version, u: to.version }
-            !@nodes.include?(to)
-        end
-        end.flatten.uniq
-      end
+      @nodes = Node.exclude(:type => 'Project').all
 
-      # Get unassociated nodes
-      @nodes += Node.exclude(:version => @nodes.map(&:version)).exclude(:type => 'Project').all
+      @nodes.each do |n|
+        n.to.each do |to|
+          @edges << { v: n.version, u: to.version }
+        end
+      end
     end
   end
 
@@ -150,7 +143,7 @@ class ProjectsController < ApplicationController
         
         data = []
         data += @nodes.map { |n| { type: :node, op: :add, id: n.version, name: n.name } }
-        data += @edges.map { |h| { type: :node, op: :add }.merge(h) }
+        data += @edges.map { |h| { type: :edge, op: :add }.merge(h) }
         
         render :json => data
       end
@@ -160,18 +153,23 @@ class ProjectsController < ApplicationController
   # Pass json string in data parameter
   # Untested
   def write
-    data = ActiveSupport.JSON.decode(params[:data])
-    raise "Expected Array" unless data.is_a?(Array)
+    data = ActiveSupport::JSON.decode(params[:data])
+    if data.is_a?(Array)
+    elsif data.is_a?(Hash)
+      data = [data]
+    else
+      raise "Expected Array or Hash"
+    end
     response = []
     @project.context do
-      data.each do |hash|
+      response = data.map do |hash|
         type, op = %w(type op).map do |k|
           v = hash.delete(k)
-          raise "Expected #{k}" unless k
-          k.downcase
+          raise "Expected #{k} got #{hash.inspect}" unless v
+          v.downcase
         end
 
-        raise "Expected op to be add or remove" unless %w(add remove).included?(op)
+        raise "Expected op to be add or remove: #{op}" unless %w(add remove).include?(op)
         
         resp = { type: type, op: op }
         
@@ -182,29 +180,30 @@ class ProjectsController < ApplicationController
           
           if op == 'add'
             node = Node.create(name: name)
-            response << resp.merge(id: node.id, name: name) 
           else # remove
             id = hash.delete('id')
             raise "Expected id" unless id
             node = Node.where(version: Integer(id)).first
             node.delete
           end
+          resp.merge(id: node.version, name: name) 
           
         when 'edge'
           to, from = ['u', 'v'].map do |k|
-            Node.where(version: Integer(hash.delete(a))).first
+            Node.where(version: Integer(hash.delete(k))).first
           end
           
           from.send("#{op}_to", to)
-          response << resp.merge(u: to, v: from)
+          resp.merge(u: to.version, v: from.version)
         else
           raise "Expected type to be Node or Edge"
         end      
       end
     end
 
-    respond_to do |format|
-      format.json { render :json => response }
-    end
+#    respond_to do |format|
+#      format.json { render :json => response }
+#    end
+    render :json => response
   end
 end
