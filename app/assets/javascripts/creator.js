@@ -23,7 +23,22 @@ var renderer = new dagreD3.Renderer();
 var layout = dagreD3.layout();
 layout = layout.nodeSep(20).rankSep(20);
 var orientation = "vertical";
-function render(){renderer.layout(layout).run(g, d3.select('svg g'));}
+
+function render(){
+	renderer.layout(layout).run(g, d3.select('svg g'));
+	svg.selectAll('.node-outer')
+		.call(d3.behavior.drag()
+			.on('dragend', nodeDragend))
+    	.on('contextmenu', contextmenu)
+    	.on('mousedown', nodeClick);
+    svg.selectAll('node-outer')
+    	.on('mouseover', nodeMouseover);
+    	
+    	if(activeNode){
+		svg.selectAll('#' + activeNode + '.node-outer').classed('active-node', true);
+	}
+}
+	
 
 var tempData;
 function loadProject(){
@@ -35,7 +50,7 @@ function loadProject(){
         dataType: "json",
         success: function(data){
         	tempData = data;
-        	draw(data);
+        	draw();
         },failure: function(errMsg) {
             alert(errMsg);
         }
@@ -58,15 +73,15 @@ function sendData(){
   	});
 }
 
-function format(data){
-	for (node in data.nodes){
-		if(data.nodes[node].value.label[0] !=="<"){
-			var title = data.nodes[node].value.label;
+function format(){
+	for (node in tempData.nodes){
+		if(tempData.nodes[node].value.label[0] !=="<"){
+			var title = tempData.nodes[node].value.label;
 			var subtitle = "Subtitle";
-			var id = data.nodes[node].id;
+			var id = "id" + tempData.nodes[node].id;
 			var nodeIcon = 'http://www.endlessicons.com/wp-content/uploads/2013/02/wrench-icon-614x460.png';
 			var menuAlign = 'align:left';
-			data.nodes[node].value.label = 
+			tempData.nodes[node].value.label = 
 				"<div class = 'node-outer' id = " + id + ">" +
 					"<img class = 'node-icon' src = " + nodeIcon + " id = " + id + ">" +
 					"<div class = 'node-title-area' id = " + id + ">" +
@@ -80,17 +95,13 @@ function format(data){
 	}
 }
 
-function draw(data){
-	var d = data;
-	format(d);
+function draw(){
+	var d = tempData;
+	format();
 	g = dagreD3.json.decode(d.nodes, d.edges);
     render();
     render();
-    svg.selectAll('.node-outer')
-    	.on('contextmenu', contextmenu)
-    	.on('click', nodeClick);
 }
-
 function newNode(){
 	var ids = [];
 	var id;
@@ -99,13 +110,13 @@ function newNode(){
 		id = Math.max.apply(null,ids)+1;}
 	var name = prompt("enter the name");
 	tempData.nodes.push({ "id": id, "value": { "label": name } });
-	draw(tempData);
+	draw();
 	newId = id;
 }
 
 function newEdge(to, from){
 	tempData.edges.push({"id": null, "v": to, "u": from});
-	draw(tempData);
+	draw();
 }
 
 $(document).ready(function(){
@@ -129,90 +140,108 @@ d3.select(window)
 if (d3.event) {
     // prevent browser's default behavior
     d3.event.preventDefault();
-  }
+ }
 
 // listener functions
 
 	//graph states
-var selected_node = null,
-    selected_link = null,
-    mouseup_link = null,
-    mousedown_node = null,
-    mouseup_node = null;
-
-
-function mousedown(){}
+function nodeDragend(){
+	if(activeNode){
+		var abort = false;
+		var source = activeNode.substr(2,100);
+		var target = d3.event.sourceEvent.target.id.substr(2,100);
+		g.eachEdge(function(e,u,v,label){
+			if(source == u && target == v){
+				abort = true;
+				return;
+			}
+		});
+		if(target != source && abort == false){
+			newEdge(target, source);
+		}
+	}
+}
+function nodeMouseover(){
+	mouseNode = d3.event.target.id;
+	console.log(mouseNode);
+}
 function mousemove(){
 	var mouse = d3.mouse(this);
 }
-function mouseup(){}
-function keydown(){}
-function mouseenter(){}
-function nodeClick(){
-	if(targetNode == sourceNode){return;}else{
-	newEdge(targetNode, sourceNode);
-}}
-var contextMenuShowing = false;
-function contextmenu(){
-	if(contextMenuShowing) {
-        d3.event.preventDefault();
-        d3.select(".popup").remove();
-        contextMenuShowing = false;
-    } else {
-    	
-		id = d3.event.target.id;
-        d3.event.preventDefault();
-        contextMenuShowing = true;
-        mousePosition = d3.mouse(backdrop.node());
-                
-        menu = "<ul class = 'custom-context-menu'>";
-        for(var i = 0; i < menuData.items.length; i++){
-        	menu = menu + "<li class = 'context-menu-item' onclick = " +
-        						menuData.items[i].action + "(" + id + ");" +">" +
-        						menuData.items[i].text +
-        					"</li>";
-        }
-        menu = menu + "</ul>";
-        
-        // Build the popup
-		var w, h;
-        popup = svg.append("foreignObject")
-            .attr("class", "popup")
-            .attr("width", 100000);
 
-        popup.append('xhtml:div')
-            .html(function() { return menu; })
-      		.each(function() {
-	        	w = this.clientWidth;
-	        	h = this.clientHeight;
-	      	});
-	      	w = 300;
-	      	h = h + 10;
-		popup
-			.attr('width', w)
-			.attr('height', h)
-			.attr('x', mousePosition[0])
-			.attr('y', mousePosition[1] - h/2 );
-        
-        svgSize = [
-            backdrop.node().width.animVal.value,
-            backdrop.node().height.animVal.value
-        ];
-        //backdrop.node().width.animVal.value
-        
-        
-        if (w + mousePosition[0] > svgSize[0]) {
-            popup.attr('x', mousePosition[0] - w);
-        }
-        
-        if (h + mousePosition[1] > svgSize[1]) {
-            popup.attr('y', mousePosition[1] - h);
-        }
-        
-        if (h > mousePosition[1]) {
-            popup.attr('y', mousePosition[1]);
-        }
+function keydown(){}
+function nodeClick(){
+	activeNode = d3.event.target.id;
+	render();
+	d3.select('.popup').remove();
+}
+
+function contextmenu(){
+    d3.event.preventDefault(); // prevent default menu
+    var popup = d3.select(".popup");
+    popup.remove();// delete old menu in case it's there
+	id = d3.event.target.id.substr(2,100); 
+    mousePosition = d3.mouse(backdrop.node()); //map mouse movements
+    
+    //Create the html for the menu
+    menu = "<ul class = 'custom-context-menu'>";
+    for(var i = 0; i < menuData.items.length; i++){
+    	menu = menu + "<li class = 'context-menu-item' onclick = " +
+    						menuData.items[i].action + "(" + id + ");" +">" +
+    						menuData.items[i].text +
+    					"</li>";
     }
+    menu = menu + "</ul>";
+    
+    // Build the popup
+	var w, h;
+    popup = svg.append("foreignObject")
+        .attr("class", "popup")
+        .attr("width", 100000);
+
+    popup.append('xhtml:div')
+        .html(function() { return menu; })
+  		.each(function() {
+        	w = this.clientWidth;
+        	h = this.clientHeight;
+      	});
+      	w = 300;
+      	h = h + 10;
+	popup
+		.attr('width', w)
+		.attr('height', h)
+		.attr('x', mousePosition[0])
+		.attr('y', mousePosition[1] - h/2 );
+    
+    svgSize = [
+        backdrop.node().width.animVal.value,
+        backdrop.node().height.animVal.value
+    ];
+    
+    //keep menu inside the boundaries
+    if (w + mousePosition[0] > svgSize[0]) {
+        popup.attr('x', mousePosition[0] - w);
+    }
+    
+    if (h + mousePosition[1] > svgSize[1]) {
+        popup.attr('y', mousePosition[1] - h);
+    }
+    
+    if (h > mousePosition[1]) {
+        popup.attr('y', mousePosition[1]);
+    }
+    
+    //delete context menu on mouse exit
+    
+    popup
+    .on('mouseleave', function(){
+    	if (d3.event.target.class !== 'custom-context-menu' || d3.event.target.id !== id){
+    		d3.select('.popup').remove();
+    	}
+    })
+    .on('click', function(){
+    	d3.select('.popup').remove();
+    });
 }
 
 //DOM interaction functions
@@ -239,6 +268,10 @@ menuData = {
 	}, 
 	"items": [
 		{
+			"text": "Open Linked Document",
+			"action": 'function'
+		},
+		{
 			"text": "Add child step",
 			"action": 'nodeFrom'
 		},
@@ -247,20 +280,8 @@ menuData = {
 			"action": 'nodeTo'
 		},
 		{
-			"text": "Edge from here",
-			"action": 'edgeFrom'
-		},
-		{
-			"text": "Edge to here",
-			"action": 'edgeTo'
-		},
-		{
 			"text": "Delete this node",
 			"action": 'deleteNode'
-		},
-		{
-			"text": "Open Linked Document",
-			"action": 'function'
 		}
 ]};
 var targetNode,
@@ -284,11 +305,6 @@ function edgeFrom(source){
 	sourceNode = source;
 }
 function deleteNode(id){
-	for (i=0; i < tempData.nodes.length; i++){
-	    if ((tempData.nodes[i].hasOwnProperty("id")) && (tempData.nodes[i]["id"] === id)) {
-	        tempData.nodes = tempData.nodes.splice( id, 1 );
-	        draw();
-	        break;   // so that it doesn't keep looping, after finding a match
-	    } 
-	}
+	g.delNode(id);
+	render();
 }
