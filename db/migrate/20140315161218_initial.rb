@@ -23,8 +23,10 @@ module Sequel
         Bignum :version, null: false, default: Sequel.function(:nextval, 'version_seq')
         primary_key [:version]
 
-        foreign_key :branch_id, :branches, null: false
-        column      :branch_path, 'integer[]', null: false, default: '{}'
+        unless options[:no_branch]
+          foreign_key :branch_id, :branches, null: false
+          column      :branch_path, 'integer[]', null: false, default: '{}'
+        end
 
         unless options[:no_record]
           Integer   :record_id, null: false
@@ -34,7 +36,7 @@ module Sequel
          
         DateTime    :created_at, null: false
 
-        instance_eval(&block)
+        instance_eval(&block) if block_given?
 
         # Does moving this to the end improve allocation like in C?
         TrueClass   :deleted,    null: false, default: false
@@ -46,6 +48,28 @@ module Sequel
         create_sequence(sequence_name,
                         ownedby_table: table_name, ownedby_column: :record_id)
         set_column_default(table_name, :record_id, Sequel.function(:nextval, sequence_name))
+      end
+    end
+
+    def create_many_to_many_version_table(table_name, options = {}, &block)
+      create_version_table :edges, no_record: true, no_branch: options[:cross_branch] do
+        fgn_keys = [:from, :to].map do |aspect|
+          rows = %w(record_id branch_path branch_id).map { |n| :"#{aspect}_#{n}" }
+          rows.pop unless options[:cross_branch]
+          record_id, branch_path, branch_id = rows
+          # must be in set of record_ids on nodes but record_ids is not unique
+          Integer record_id, null: false
+          
+          foreign_key branch_id, :branches, null: false if branch_id
+          column branch_path, 'integer[]', null: false, default: '{}'
+          
+          index rows
+          rows
+        end.flatten
+
+        instance_eval(&block) if block_given?
+
+        unique fgn_keys + [:deleted]
       end
     end
   end
@@ -130,22 +154,7 @@ CREATE CONSTRAINT TRIGGER cycle_test
       String        :data, text: true
     end
 
-    create_version_table :edges, no_record: true do
-      fgn_keys = [:from, :to].map do |aspect|
-        rows = %w(record_id branch_path).map { |n| :"#{aspect}_#{n}" }
-        record_id, branch_path = rows
-        #foreign_key record, :nodes, key: :record_id
-        # must be in set of record_ids on nodes but record_ids is not unique
-        Integer record_id, null: false
-        column branch_path, 'integer[]', null: false, default: '{}'
-
-        index rows
-        rows
-      end.flatten
-
-      unique fgn_keys + [:deleted]
-    end
-
+    create_many_to_many_version_table(:edges)
 
     create_table :users do
       primary_key :id
