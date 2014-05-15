@@ -1,0 +1,9 @@
+%h1 Clone project #{@project.name}
+
+= link_to 'Back', categories_path
+
+= form_for(@project, url: {action: :branch}, method: :post) do |f|
+  Name:
+  = hidden_field :category, :version
+  = f.text_field :name
+  .actions= f.submit 'Clone'

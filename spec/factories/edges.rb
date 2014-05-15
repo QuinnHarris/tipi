@@ -2,5 +2,10 @@
 
 FactoryGirl.define do
   factory :edge do
+
+    factory :edge_ajax do
+      type  'edge'
+      op    'add'
+    end 
   end
 end

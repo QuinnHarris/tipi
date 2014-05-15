@@ -7,6 +7,6 @@
 #   Mayor.create(name: 'Emanuel', city: cities.first)
 
 Branch
-public_view = View.create(name: 'Public View')
+public_view = ViewBranch.create(name: 'Public View')
 Node
 root_category = Category.create(name: 'Root Category', branch: public_view)

@@ -1,0 +1,26 @@
+%h1 Edit project #{@project.name}
+
+= render 'form'
+
+= link_to 'Remove', project_path(@project), method: :delete
+
+%h2 History
+
+%table
+  %thead
+    %tr
+      %td Version
+      %td Branch ID
+      %td Branch Path
+      %td Name
+      %td Time
+      %td Deleted
+  %tbody
+    - for project in @project.versions
+      %tr
+        %td= link_to project.version, project_path(project)
+        %td= link_to project.branch_id, project_path(project, format: :json)
+        %td= project.branch_path
+        %td= project.name
+        %td= project.created_at
+        %td= project.deleted

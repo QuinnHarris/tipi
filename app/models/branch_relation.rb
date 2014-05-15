@@ -1,4 +1,5 @@
 class BranchRelation < Sequel::Model
-  # belongs_to :predecessor, class_name: 'Branch', foreign_key: :predecessor_id
-  # belongs_to :successor,   class_name: 'Branch', foreign_key: :successor_id
+  [:predecessor, :successor].each do |aspect|
+    many_to_one aspect, :class => Branch
+  end
 end

@@ -44,6 +44,7 @@ module Tipi
 
     config.sequel.after_connect = proc do
       Sequel::Model.db.extension :pg_array
+      Sequel.extension :pg_array_ops
       Sequel::Model.plugin :timestamps
     end
   end

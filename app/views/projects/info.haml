@@ -1,0 +1,20 @@
+%h1 Category Versions (record_id: #{@category.record_id})
+
+= link_to 'Back', categories_path
+
+%table
+  %thead
+    %tr
+      %td Version
+      %td Branch ID
+      %td Name
+      %td Time
+      %td Deleted
+  %tbody
+    - for category in @category.versions
+      %tr
+        %td= category.version
+        %td= category.branch_id
+        %td= category.name
+        %td= category.created_at
+        %td= category.deleted

@@ -56,34 +56,36 @@ require ::File.expand_path('../../config/environment',  __FILE__)
 
 data = ActiveSupport::JSON.decode(json_data)
 
-View.public.context do
+ViewBranch.public.context do
   category = Category.root.get_path(category_path)
-  project = category.add_project(project_name)
 
-  node_map = {}
-  data['nodes'].each do |node_h|
-    id, name = %w(id name).map do |k|
-      node_h[k].tap { |v|
-        raise "No #{k} attribute in #{node_h.inspect} for nodes" unless v }
+  category.add_project(name: project_name) do |project|    
+    node_map = {}
+    data['nodes'].each do |node_h|
+      id, name = %w(id name).map do |k|
+        node_h[k].tap { |v|
+          raise "No #{k} attribute in #{node_h.inspect} for nodes" unless v }
+      end
+      raise "Duplicate node ID: #{id}" if node_map.has_key?(id)
+      node_map[id] = Step.create(name: name)
     end
-    raise "Duplicate node ID: #{id}" if node_map.has_key?(id)
-    node_map[id] = Node.create(name: name)
-  end
-
-  has_to = Set.new
-  data['edges'].each do |edge_h|
-    from, to = %w(from to).map do |k|
-      v = edge_h[k]
-      raise "No #{k} attribute in #{edge_h.inspect} for edges" unless v
-      node_map[v].tap { |n|
-        raise "No associated node #{v} for #{k} attribute in #{edge_h.inspect} for edges" unless n }
+    
+    has_to = Set.new
+    data['edges'].each do |edge_h|
+      from, to = %w(from to).map do |k|
+        v = edge_h[k]
+        raise "No #{k} attribute in #{edge_h.inspect} for edges" unless v
+        node_map[v].tap { |n|
+          raise "No associated node #{v} for #{k} attribute in #{edge_h.inspect} for edges" unless n }
+      end
+      from.add_to(to)
+      has_to << to
     end
-    from.add_to(to)
-    has_to << to
+    
+    # Make sure project depends on all nodes (indirectly)
+    (node_map.values - has_to.to_a).each do |node|
+      project.add_to(node)
+    end
   end
 
-  # Make sure project depends on all nodes (indirectly)
-  (node_map.values - has_to.to_a).each do |node|
-    project.add_to(node)
-  end
 end

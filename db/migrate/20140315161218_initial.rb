@@ -24,14 +24,12 @@ module Sequel
         primary_key [:version]
 
         foreign_key :branch_id, :branches, null: false
+        column      :branch_path, 'integer[]', null: false, default: '{}'
 
         unless options[:no_record]
           Integer   :record_id, null: false
 
-          refs = [:record_id, :branch_id]
-          
-          index refs
-          index refs.reverse
+          index :record_id
         end
          
         DateTime    :created_at, null: false
@@ -65,6 +63,8 @@ Sequel.migration do
       String        :name,        null: false
       String        :description, text: true
 
+      Boolean	    :merge_point
+
       DateTime      :created_at,  null: false
       DateTime      :updated_at
     end
@@ -75,7 +75,7 @@ Sequel.migration do
       primary_key   [:successor_id, :predecessor_id]
 
       # Index by both successor_id and predecessor_id (primary_key creates index)
-      index         [:predecessor_id, :successor_id], unique: true
+      index         [:successor_id, :predecessor_id], unique: true
 
       BigInt        :version
 
@@ -132,12 +132,16 @@ CREATE CONSTRAINT TRIGGER cycle_test
 
     create_version_table :edges, no_record: true do
       fgn_keys = [:from, :to].map do |aspect|
-        name = "#{aspect}_version".to_sym
-        Bignum name, null: false
-        foreign_key [name], :nodes
-        index name
-        name
-      end
+        rows = %w(record_id branch_path).map { |n| :"#{aspect}_#{n}" }
+        record_id, branch_path = rows
+        #foreign_key record, :nodes, key: :record_id
+        # must be in set of record_ids on nodes but record_ids is not unique
+        Integer record_id, null: false
+        column branch_path, 'integer[]', null: false, default: '{}'
+
+        index rows
+        rows
+      end.flatten
 
       unique fgn_keys + [:deleted]
     end

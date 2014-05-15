@@ -90,6 +90,7 @@ CREATE TABLE branches (
     type text NOT NULL,
     name text NOT NULL,
     description text,
+    merge_point boolean,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone
 );
@@ -133,9 +134,12 @@ CREATE SEQUENCE version_seq
 CREATE TABLE edges (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     created_at timestamp without time zone NOT NULL,
-    from_version bigint NOT NULL,
-    to_version bigint NOT NULL,
+    from_record_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_record_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -158,6 +162,7 @@ CREATE TABLE node_instances (
 CREATE TABLE nodes (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     record_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
@@ -284,11 +289,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edges_from_version_to_version_deleted_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_record_id_from_branch_path_to_record_id_to_branc_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_version_to_version_deleted_key UNIQUE (from_version, to_version, deleted);
+    ADD CONSTRAINT edges_from_record_id_from_branch_path_to_record_id_to_branc_key UNIQUE (from_record_id, from_branch_path, to_record_id, to_branch_path, deleted);
 
 
 --
@@ -332,38 +337,31 @@ ALTER TABLE ONLY users
 
 
 --
--- Name: branch_relations_predecessor_id_successor_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: branch_relations_successor_id_predecessor_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE UNIQUE INDEX branch_relations_predecessor_id_successor_id_index ON branch_relations USING btree (predecessor_id, successor_id);
-
-
---
--- Name: edges_from_version_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX edges_from_version_index ON edges USING btree (from_version);
+CREATE UNIQUE INDEX branch_relations_successor_id_predecessor_id_index ON branch_relations USING btree (successor_id, predecessor_id);
 
 
 --
--- Name: edges_to_version_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX edges_to_version_index ON edges USING btree (to_version);
-
-
---
--- Name: nodes_branch_id_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX nodes_branch_id_record_id_index ON nodes USING btree (branch_id, record_id);
+CREATE INDEX edges_from_record_id_from_branch_path_index ON edges USING btree (from_record_id, from_branch_path);
 
 
 --
--- Name: nodes_record_id_branch_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: edges_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX nodes_record_id_branch_id_index ON nodes USING btree (record_id, branch_id);
+CREATE INDEX edges_to_record_id_to_branch_path_index ON edges USING btree (to_record_id, to_branch_path);
+
+
+--
+-- Name: nodes_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX nodes_record_id_index ON nodes USING btree (record_id);
 
 
 --
@@ -426,22 +424,6 @@ ALTER TABLE ONLY edges
 
 
 --
--- Name: edges_from_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_version_fkey FOREIGN KEY (from_version) REFERENCES nodes(version);
-
-
---
--- Name: edges_to_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_to_version_fkey FOREIGN KEY (to_version) REFERENCES nodes(version);
-
-
---
 -- Name: node_instances_node_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -477,4 +459,4 @@ ALTER TABLE ONLY users
 -- PostgreSQL database dump complete
 --
 
-INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');
+INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');

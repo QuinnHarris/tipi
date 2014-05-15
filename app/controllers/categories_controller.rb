@@ -2,7 +2,9 @@ class CategoriesController < ApplicationController
   # Show all categories
   # GET /categories
   def index
-    @category = Category.root
+    @category = Category.root(params[:version])
+    @prev_version = Node.prev_version(@category.context)
+    @next_version = Node.next_version(@category.context)
   end
 
   # Show all versions of a category
@@ -14,7 +16,7 @@ class CategoriesController < ApplicationController
   # Show page to create a new category
   # GET /categories/new
   def new
-    View.public.context do
+    ViewBranch.public.context do
       @parent = Category.where(version: params[:parent]).first
       @category = Category.new
     end
@@ -23,7 +25,7 @@ class CategoriesController < ApplicationController
   # Create new category
   # POST /categories
   def create
-    View.public.context do
+    ViewBranch.public.context do
       parent = Category.where(version: Integer(params[:parent][:version])).first
       parent.add_child(params[:category])
     end
@@ -35,7 +37,7 @@ class CategoriesController < ApplicationController
   before_action :set_category, only: [:edit, :update, :destroy]
   private
   def set_category
-    @category = Category.dataset(View.public).where(version: params[:id]).first
+    @category = Category.dataset(ViewBranch.public).where(version: params[:id]).first
   end
   public
 

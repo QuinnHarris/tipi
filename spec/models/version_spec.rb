@@ -7,49 +7,6 @@ describe Branch do
       expect(@branch).to be_an_instance_of(Branch)
     end
 
-    %w(predecessor successor).each do |aspect|
-      it "can add, remove and enumerate #{aspect.pluralize}" do
-        expect(@branch.send(aspect.pluralize)).to eq([])
-        
-        other = Branch.create(name: aspect)
-        expect(other).to be_an_instance_of(Branch)
-        expect(@branch.send("add_#{aspect}", other)).to eq(other)
-        expect(@branch.send(aspect.pluralize)).to eq([other])
-        expect(@branch.send(aspect.pluralize, true)).to eq([other])
-        
-        expect { @branch.send("add_#{aspect}", other) }.to raise_error(Sequel::UniqueConstraintViolation, /\"branch_relations_pkey\"/)
-        
-        expect(@branch.send("remove_#{aspect}", other)).to eq(other)
-        expect(@branch.send(aspect.pluralize)).to eq([])
-        expect(@branch.send(aspect.pluralize, true)).to eq([])
-      end
-    end
-
-    it "prohibits branch cycles" do
-      expect { @branch.add_successor(@branch) }.to raise_error(Sequel::DatabaseError, /cycle found/)
-
-      other = @branch
-      (1..3).each do |i|
-        other = other.fork(name: "Branch #{i}")
-      end
-      expect { other.add_successor(@branch) }.to raise_error(Sequel::DatabaseError, /cycle found/)
-    end
-    
-    it "can fork and merge" do
-      left = @branch.fork(name: 'Left')
-      expect(left).to be_an_instance_of(Branch)
-
-      right = @branch.fork(name: 'Right')
-      expect(right).to be_an_instance_of(Branch)
-
-      merge = Branch.merge(left, right, name: 'Merge')
-      expect(merge).to be_an_instance_of(Branch)
-
-      list = merge.context_dataset.all
-      expect(list.map { |e| e[:id] }.uniq)
-        .to match_array([@branch,left,right,merge].map { |e| e[:id] })
-    end
-
     it "node object has activemodel bahavior" do
       node_a = Node.new(name: 'Node A', branch: @branch)
       expect(node_a.persisted?).to be_false
@@ -101,10 +58,10 @@ describe Branch do
     br_c = br_b.fork(name: 'Branch C', version_lock: true) do
       expect(Node.all).to match_array([node_a, node_b])
       node_a_del = node_a.delete
-      expect(node_a_del.context).to eq(Branch.current)
+      expect(node_a_del.context).to eq(BranchContext.current)
       expect(Node.all).to match_array([node_b])
 
-      expect { br_a.context { } }.to raise_error(SubContextError)
+      expect { br_a.context { } }.to raise_error(BranchContextError, /^Branch found.+but/)
     end
 
     br_b.context do
@@ -115,7 +72,7 @@ describe Branch do
 
       expect(Node.all).to match_array([node_a, node_b, node_c])
 
-      expect { Node.create(name: 'Fail', branch: br_c) }.to raise_error(SubContextError)
+      expect { Node.create(name: 'Fail', branch: br_c) }.to raise_error(BranchContextError, /^Branch not found for/)
     end
 
     br_c.context do
@@ -127,10 +84,37 @@ describe Branch do
       br_c.context(version: node_b_del.version-1) do
         expect(Node.all).to match_array([node_b])
 
-        expect { node_b.delete }.to raise_error(VersionedObjectError)
+        expect { node_b.delete }.to raise_error(BranchContextError, "Context without version required")
 
-        expect { br_c.context { } }.to raise_error(SubContextError)
+        expect { br_c.context { } }.to raise_error(BranchContextError, /Branch match.+but/)
       end
+    end
+
+    # Merge Tests
+    br_d = Branch.merge(br_a, br_b, name: 'Merge AB') do
+      expect(Node.all)
+        .to match_array([[node_a, br_a],
+                         [node_a, br_b],
+                         [node_b, br_b],
+                         [node_c, br_a],
+                         [node_c, br_b]].map do |node, branch|
+                          node.dup.tap { |n| n[:branch_path] = [branch.id] }
+                        end)
+      
+      node_b_new = node_b.create(name: "Node B v2")
+      
+      node_b_row = Node.db[:nodes].where(version: node_b.version).first
+      node_b_new_row = Node.db[:nodes].where(version: node_b_new.version).first
+
+      expect(node_b_row.delete(:branch_path)).to eq([])
+      expect(node_b_new_row.delete(:branch_path)).to eq([br_b.id])
+    end
+    
+  end
+
+  def bp_match(array)
+    array.map do |node, branch|
+      node.dup.tap { |n| n[:branch_path] = [branch.id] }
     end
   end
 
@@ -150,7 +134,7 @@ describe Branch do
     
     br_a.context do
       # In own context because failure aborts transaction
-      expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_version_to_version_deleted_key\"/)
+      expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_record_id_from_branch_path_to_record_id_to/)
     end
 
     br_b = br_a.fork(name: 'Branch B') do
@@ -172,6 +156,40 @@ describe Branch do
 
     # node_a has retained br_a context
     expect(node_a.to).to eq([node_b])
+
+    br_d = Branch.merge(br_a, br_b, name: 'Branch D (A B Merge)') do
+      # Node A
+      expect { node_a.to }.to raise_error(BranchContextError, /^Object Duplicated/)
+      node_a_list = Node.where(name: 'Node A').all
+      expect(node_a_list).to eq(bp_match([[node_a, br_a], [node_a, br_b]]))
+      node_a_list.each do |node_a|
+        expect(node_a.to).to eq(bp_match([[node_b, br_a],
+                                          [node_c, br_b]]))
+        expect(node_a.from).to eq([])
+      end
+
+      # Node B
+      # In this case the branch suggests it can be duplicated but node_b is removed
+      # in branch b so it is not duplicated.  Have it check? or feature bloat
+      expect { node_b.to }.to raise_error(BranchContextError, /^Object Duplicated/)
+      node_b_list = Node.where(name: 'Node B').all
+      expect(node_b_list).to eq(bp_match([[node_b, br_a]]))
+      expect(node_b_list.first.to).to eq([])
+      expect(node_b_list.first.from).to eq(node_a_list)
+
+      # Node C
+      expect(node_c.to).to eq([])
+      expect(node_c.from).to eq(node_a_list)
+
+      # Modify
+      expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
+      node_a_a, node_a_b = node_a_list.sort_by { |n| n.branch_path }
+      expect(node_a_a.context).to eq(BranchContext.current)
+      node_a_a_new = node_a_a.create(name: 'Node A v2')
+
+      node_a_list = Node.where(record_id: node_a.record_id).all
+      expect(node_a_list).to eq([node_a_a_new, node_a_b])
+    end
   end
 
 end
