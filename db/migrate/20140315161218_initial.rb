@@ -98,9 +98,6 @@ Sequel.migration do
       foreign_key   :successor_id, :branches
       primary_key   [:successor_id, :predecessor_id]
 
-      # Index by both successor_id and predecessor_id (primary_key creates index)
-      index         [:successor_id, :predecessor_id], unique: true
-
       BigInt        :version
 
       check { predecessor_id != successor_id }
@@ -156,6 +153,37 @@ CREATE CONSTRAINT TRIGGER cycle_test
 
     create_many_to_many_version_table(:edges)
 
+    create_table :instances do
+      primary_key :id
+      foreign_key :node_version, :nodes
+      column      :node_branch_path, 'integer[]', null: false, default: '{}'
+      index       [:node_version, :node_branch_path]
+
+      String      :state
+      Integer     :count, null: false, default: 1
+      String      :data, text: true
+
+      DateTime    :created_at, null: false
+      DateTime    :updated_at, null: false
+    end
+
+    create_table :instance_relations do
+      foreign_key   :predecessor_id, :branches
+      foreign_key   :successor_id, :branches
+      primary_key   [:successor_id, :predecessor_id]
+
+      check { predecessor_id != successor_id }
+    end
+
+    create_table :actions do
+      foreign_key :instance_id, :instances
+      foreign_key :node_version, :nodes
+      column      :node_branch_path, 'integer[]', null: false, default: '{}'
+      primary_key [:instance_id, :node_version, :node_branch_path]
+
+      String      :state
+    end
+
     create_table :users do
       primary_key :id
       foreign_key :branch_id, :branches
@@ -201,14 +229,6 @@ CREATE CONSTRAINT TRIGGER cycle_test
 
       DateTime      :created_at
       DateTime      :updated_at
-    end
-
-    create_table :node_instances do
-      foreign_key    :user_id, :users
-      foreign_key    :node_version, :nodes
-      primary_key    [:user_id, :node_version]
-
-      String       :state
     end
   end
 end

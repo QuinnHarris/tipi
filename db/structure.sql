@@ -70,6 +70,18 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
+-- Name: actions; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE actions (
+    instance_id integer NOT NULL,
+    node_version integer NOT NULL,
+    node_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    state text
+);
+
+
+--
 -- Name: branch_relations; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -145,14 +157,49 @@ CREATE TABLE edges (
 
 
 --
--- Name: node_instances; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: instance_relations; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE TABLE node_instances (
-    user_id integer NOT NULL,
-    node_version integer NOT NULL,
-    state text
+CREATE TABLE instance_relations (
+    predecessor_id integer NOT NULL,
+    successor_id integer NOT NULL,
+    CONSTRAINT instance_relations_check CHECK (true)
 );
+
+
+--
+-- Name: instances; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE instances (
+    id integer NOT NULL,
+    node_version integer,
+    node_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    state text,
+    count integer DEFAULT 1 NOT NULL,
+    data text,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: instances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE instances_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: instances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE instances_id_seq OWNED BY instances.id;
 
 
 --
@@ -259,6 +306,13 @@ ALTER TABLE ONLY branches ALTER COLUMN id SET DEFAULT nextval('branches_id_seq':
 
 
 --
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY instances ALTER COLUMN id SET DEFAULT nextval('instances_id_seq'::regclass);
+
+
+--
 -- Name: record_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -270,6 +324,14 @@ ALTER TABLE ONLY nodes ALTER COLUMN record_id SET DEFAULT nextval('nodes_record_
 --
 
 ALTER TABLE ONLY users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
+
+
+--
+-- Name: actions_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY actions
+    ADD CONSTRAINT actions_pkey PRIMARY KEY (instance_id, node_version, node_branch_path);
 
 
 --
@@ -305,11 +367,19 @@ ALTER TABLE ONLY edges
 
 
 --
--- Name: node_instances_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: instance_relations_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
-ALTER TABLE ONLY node_instances
-    ADD CONSTRAINT node_instances_pkey PRIMARY KEY (user_id, node_version);
+ALTER TABLE ONLY instance_relations
+    ADD CONSTRAINT instance_relations_pkey PRIMARY KEY (successor_id, predecessor_id);
+
+
+--
+-- Name: instances_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY instances
+    ADD CONSTRAINT instances_pkey PRIMARY KEY (id);
 
 
 --
@@ -337,13 +407,6 @@ ALTER TABLE ONLY users
 
 
 --
--- Name: branch_relations_successor_id_predecessor_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE UNIQUE INDEX branch_relations_successor_id_predecessor_id_index ON branch_relations USING btree (successor_id, predecessor_id);
-
-
---
 -- Name: edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -355,6 +418,13 @@ CREATE INDEX edges_from_record_id_from_branch_path_index ON edges USING btree (f
 --
 
 CREATE INDEX edges_to_record_id_to_branch_path_index ON edges USING btree (to_record_id, to_branch_path);
+
+
+--
+-- Name: instances_node_version_node_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX instances_node_version_node_branch_path_index ON instances USING btree (node_version, node_branch_path);
 
 
 --
@@ -400,6 +470,22 @@ CREATE CONSTRAINT TRIGGER cycle_test AFTER INSERT OR UPDATE ON branch_relations 
 
 
 --
+-- Name: actions_instance_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY actions
+    ADD CONSTRAINT actions_instance_id_fkey FOREIGN KEY (instance_id) REFERENCES instances(id);
+
+
+--
+-- Name: actions_node_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY actions
+    ADD CONSTRAINT actions_node_version_fkey FOREIGN KEY (node_version) REFERENCES nodes(version);
+
+
+--
 -- Name: branch_relations_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -424,19 +510,27 @@ ALTER TABLE ONLY edges
 
 
 --
--- Name: node_instances_node_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: instance_relations_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY node_instances
-    ADD CONSTRAINT node_instances_node_version_fkey FOREIGN KEY (node_version) REFERENCES nodes(version);
+ALTER TABLE ONLY instance_relations
+    ADD CONSTRAINT instance_relations_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES branches(id);
 
 
 --
--- Name: node_instances_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: instance_relations_successor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY node_instances
-    ADD CONSTRAINT node_instances_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE ONLY instance_relations
+    ADD CONSTRAINT instance_relations_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
+
+
+--
+-- Name: instances_node_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY instances
+    ADD CONSTRAINT instances_node_version_fkey FOREIGN KEY (node_version) REFERENCES nodes(version);
 
 
 --
