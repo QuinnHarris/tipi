@@ -49,8 +49,7 @@ describe ProjectsController do
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
-    resp_data = response_json
-    expect(resp_data).to match_array(data)
+    expect(response_json).to match_array(data)
 
     # Remove Edge
     data.delete(edge_attr)
@@ -62,8 +61,7 @@ describe ProjectsController do
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
-    resp_data = response_json
-    expect(resp_data).to match_array(data)
+    expect(response_json).to match_array(data)
 
     # Remove Node
     node_attr = data.pop
@@ -75,7 +73,6 @@ describe ProjectsController do
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
-    resp_data = response_json
-    expect(resp_data).to match_array(data)    
+    expect(response_json).to match_array(data)
   end
 end

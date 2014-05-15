@@ -63,10 +63,10 @@ Rails.application.routes.draw do
       get :info
       
       get :nodes
-      put :node_new
-      put :edge_change
+      post :node_new
+      post :edge_change
       
-      put :write
+      post :write
       
       get :clone
       post :branch

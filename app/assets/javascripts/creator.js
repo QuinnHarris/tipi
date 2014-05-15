@@ -58,12 +58,11 @@ function loadProject(){
 }
 
 function sendData(){
-	var pathUrl = dataPath + "/nodes.json";
+	var pathUrl = dataPath + "/node_new.json";
   	$.ajax({
         type: "POST",
         url: pathUrl,
-        data: data,
-        contentType: "application/json; charset=utf-8",
+        data: { name: "Node Name"  },
         dataType: "json",
         success: function(data){
         	alert(data);
