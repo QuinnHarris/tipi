@@ -45,13 +45,15 @@ class Node < Sequel::Model
       (proc do |r|
          current_context.not_included_or_duplicated!(context, false)
          current_context.dataset do |branch_context_data|
+           inter_branch = false
            dataset = r.associated_class.raw_dataset
+
            
            # Assuming this node is the latest in the current branch context
            edge_dst_path = Sequel.pg_array(:"#{opposite}_branch_path")
            ds = dataset.join(r[:join_table],
                              :"#{opposite}_record_id" => :record_id)
-           # Exclude based on branch_path later as it needs to be concatentad with branch table
+           # Exclude based on branch_path later as it needs to be concatenated with branch table
            
            edge_src_path = Sequel.pg_array(:"#{aspect}_branch_path")
            this_branch_path = Sequel.pg_array_op(branch_path) # Already concatenated with branch table
@@ -64,12 +66,9 @@ class Node < Sequel::Model
            # Must check to from branch context if there is a version lock
            tables = [r[:join_table], :nodes]
            tables.each do |table|
-             # !!! Duplicated in versioned code, make part of branch ds?
-             ds = ds.join(Sequel.as(branch_context_data, "branch_#{table}"),
-                          :branch_id => Sequel.qualify(table, :branch_id)) do |j, lj|
-               Sequel.expr(Sequel.qualify(j, :version) => nil) | 
-                 (Sequel.qualify(table, :version) <= Sequel.qualify(j, :version))
-             end
+             ds = ds.join_branch(branch_context_data,
+                                 join_table: table,
+                                 table_alias: :"branch_#{table}")
            end
 
            # Exclude based on branch_path here

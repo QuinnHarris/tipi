@@ -38,6 +38,16 @@ module DatasetBranchContext
     o && setup_object(o)
   end
 
+  def join_branch(context_data, options = {})
+    join_column = options[:join_table] ?
+        Sequel.qualify(options[:join_table], :branch_id) : :branch_id
+
+    join(context_data, { :branch_id => join_column }, options) do |j, lj|
+      Sequel.expr(Sequel.qualify(j, :version) => nil) |
+          (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
+    end
+  end
+
   protected
   def _all(block)
     super.map { |r| setup_object(r) }
@@ -84,13 +94,8 @@ module Versioned
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private
     def self.dataset_from_context(context, options = {})
-      # !!! Duplicated in node/edge code, make part of branch ds?
       context.dataset do |branch_context_dataset|
-        ds = raw_dataset.join(branch_context_dataset,
-                              :branch_id => :branch_id) do |j ,lj, js|
-          Sequel.expr(Sequel.qualify(j, :version) => nil) |
-            (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
-        end
+        ds = raw_dataset.join_branch(branch_context_dataset)
         
         branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
           .pg_array.concat(Sequel.qualify(table_name, :branch_path) )

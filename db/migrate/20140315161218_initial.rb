@@ -80,7 +80,6 @@ Sequel.migration do
     # Global version sequence
     create_sequence(:version_seq)
 
-    # Should the version sequence be global?  Would it be useful, will we overflow it.
     create_table :branches do
       primary_key   :id
       String        :type, null: false
@@ -104,7 +103,8 @@ Sequel.migration do
     end
 
     # Use stored proceedure and trigger to test for cycles
-    # This will not detect cycles when two transactions are opened simultaniously that together insert rows causing a cycle
+    # This will not detect cycles when two transactions are opened
+    # simultaneously that together insert rows causing a cycle
     run %(
 CREATE FUNCTION cycle_test() RETURNS TRIGGER AS $cycle_test$
 DECLARE
@@ -217,7 +217,8 @@ CREATE CONSTRAINT TRIGGER cycle_test
       String   :unconfirmed_email # Only if using reconfirmable
 
       ## Lockable
-      Integer  :failed_attempts,        null: false, default: 0 # Only if lock strategy is :failed_attempts
+      # Only if lock strategy is :failed_attempts
+      Integer  :failed_attempts,        null: false, default: 0
       String   :unlock_token # Only if unlock strategy is :email or :both
       index    :unlock_token,           unique: true
       DateTime :locked_at
