@@ -1,3 +1,28 @@
+/*bugs: 
+	on zoom the html shrinks more than the svg
+	entire page stops working and mouse event goes to crosshair;
+		happens when you make an edge with a parent.
+	if edge name is null don't create one (if user cancels)
+*/
+
+// diagram showing cost in money and time
+// incremental display arrow keys
+// node bank
+// temporary display of active node contents
+	// fill in keydown function
+	// undo/redo functionality
+	// forking
+	// social media interaction
+	// permission
+// project title area and real toolbars
+	// if the screen is a smart phone:
+	// mark completed nodes green
+	// mark available nodes
+	// update svg margins with the d3 example
+	// add scrolling
+	// add moving text if title is to long
+	// button for delegate to team
+	// animate transition
 //initialize svg (d3)
 var svg;
 var backdrop;
@@ -34,7 +59,7 @@ function render(){
     svg.selectAll('node-outer')
     	.on('mouseover', nodeMouseover);
     	
-    	if(activeNode){
+    	if(typeof activeNode !== 'undefined'){
 		svg.selectAll('#' + activeNode + '.node-outer').classed('active-node', true);
 	}
 }
@@ -74,8 +99,10 @@ function sendData(){
 
 function format(){
 	for (node in tempData.nodes){
-		if(tempData.nodes[node].value.label[0] !=="<"){
-			var title = tempData.nodes[node].value.label;
+		//only execute if it doesn't have a label
+		if( typeof tempData.nodes[node].value.label === 'undefined'){
+			//set the label to be an html element. This will tell dagreD3 to insert a foreignObject tag.
+			var title = tempData.nodes[node].value.name;
 			var subtitle = "Subtitle";
 			var id = "id" + tempData.nodes[node].id;
 			var nodeIcon = 'http://www.endlessicons.com/wp-content/uploads/2013/02/wrench-icon-614x460.png';
@@ -105,17 +132,54 @@ function newNode(){
 	var ids = [];
 	var id;
 	if(tempData.nodes[0].id == undefined){id = 1;}else{
-		for(node in tempData.nodes){ids.push(tempData.nodes[node].id);}
+		for(i=0; i<tempData.nodes.length; i++){ids.push(tempData.nodes[node].id);}
 		id = Math.max.apply(null,ids)+1;}
 	var name = prompt("enter the name");
-	tempData.nodes.push({ "id": id, "value": { "label": name } });
+	tempData.nodes.push({ "id": id, "value": { "name": name } });
 	draw();
 	newId = id;
+	//now send data to the server and 
+  	$.ajax({
+        type: "POST",
+        url: dataPath + "/node_new.json",
+        data: { name: name },
+        dataType: "json",
+        success: function(data){
+        	for ( i = 0 ; i < tempData.nodes.length-1; i++){
+        		if (tempData.nodes[i].id == id){
+        			tempData.nodes[i].id = data.id;
+        			// change all edges that use old id
+        			for( j=0; j < tempData.edges.length-1; j++ ){
+        				if (tempData.edges[j].u == id){
+        					tempData.edges[j].u = data.id;
+        				}if(tempData.edges[j].v == id){
+        					tempData.edges[j].v = data.id;
+        				}
+        			}
+        			draw();
+        			break;
+        		}
+        	}
+        },failure: function(errMsg) {
+            alert(errMsg);
+        }
+  	});
 }
 
 function newEdge(to, from){
 	tempData.edges.push({"id": null, "v": to, "u": from});
 	draw();
+	$.ajax({
+        type: "POST",
+        url: dataPath + "/edge_change.json",
+        data: {op: 'add', to: to, from: from },
+        dataType: "json",
+        success: function(data){
+        	console.log(data);
+        },failure: function(errMsg) {
+            alert(errMsg);
+        }
+  	});
 }
 
 $(document).ready(function(){
@@ -145,18 +209,27 @@ if (d3.event) {
 
 	//graph states
 function nodeDragend(){
-	if(activeNode){
+	if(typeof activeNode !== 'undefined'){
 		var abort = false;
-		var source = activeNode.substr(2,100);
-		var target = d3.event.sourceEvent.target.id.substr(2,100);
-		g.eachEdge(function(e,u,v,label){
-			if(source == u && target == v){
+		var source = activeNode.substr(2, activeNode.length);
+		var target = d3.event.sourceEvent.target.id.substr(2, activeNode.length);
+		if (typeof source != Number){
+			source = parseInt(source, 10);
+		}if (typeof target != Number){
+			target = parseInt(target, 10);
+		}
+		for (i = 0 ; i < tempData.edges.length; i++){
+			//check to see it the edge exists
+			if ( tempData.edges[i].v == target && tempData.edges[i].u == source ){
 				abort = true;
-				return;
+				break;
 			}
-		});
-		if(target != source && abort == false){
+		}
+		// make sure it is not an edge to itself and make sure target is a real target
+		if(target != source && abort == false && !isNaN(target)){
 			newEdge(target, source);
+		}else if (isNaN(target)){
+			nodeFrom(source);
 		}
 	}
 }
@@ -168,7 +241,25 @@ function mousemove(){
 	var mouse = d3.mouse(this);
 }
 
-function keydown(){}
+function keydown(){
+	if (typeof activeNode !== 'undefined') {
+		switch (d3.event.keyCode) {
+	    case 8: // backspace
+	    case 46: // delete
+	        deleteNode(activeNode);
+			break;
+		case 13: //enter
+		case 17: //control
+		case 37: // left
+		case 38: // up
+		case 39: // right
+		case 40: // down
+		case 90: //z
+		case 89: //y
+		
+		}
+	}
+}
 function nodeClick(){
 	activeNode = d3.event.target.id;
 	render();
@@ -184,7 +275,7 @@ function contextmenu(){
     
     //Create the html for the menu
     menu = "<ul class = 'custom-context-menu'>";
-    for(var i = 0; i < menuData.items.length; i++){
+    for(i = 0; i < menuData.items.length; i++){
     	menu = menu + "<li class = 'context-menu-item' onclick = " +
     						menuData.items[i].action + "(" + id + ");" +">" +
     						menuData.items[i].text +
@@ -295,15 +386,24 @@ function nodeTo(target){
 	newNode();
 	newEdge(target, newId);
 }
-
-function edgeTo(target){
-	targetNode = target;
-}
-
-function edgeFrom(source){
-	sourceNode = source;
-}
 function deleteNode(id){
-	g.delNode(id);
-	render();
+	var index;
+	for (i; i < tempData.nodes.length-1 ; i++){
+		if (tempData.nodes[i].id = id){
+			index = i;
+		}
+	}
+	tempData.nodes.splice(index, 1);
+	draw();
+	$.ajax({
+        type: "POST",
+        url: dataPath + "/edge_change.json",
+        data: {op: add, to: to, from: from },
+        dataType: "json",
+        success: function(data){
+        	console.log(data);
+        },failure: function(errMsg) {
+            alert(errMsg);
+        }
+  	});
 }
