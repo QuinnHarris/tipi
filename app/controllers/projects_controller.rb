@@ -17,7 +17,7 @@ class ProjectsController < ApplicationController
     redirect_to project_path(@project), notice: 'Category was successfully created.'
   end
 
-  before_action :set_project, except: [:index, :new, :create, :branch, :write]
+  before_action :set_project, except: [:index, :new, :create, :branch]
   private
   def set_project
     project = Project.dataset(ViewBranch.public)
