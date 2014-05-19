@@ -139,47 +139,13 @@ function newNode(){
 	draw();
 	newId = id;
 	//now send data to the server and 
-  	$.ajax({
-        type: "POST",
-        url: dataPath + "/node_new.json",
-        data: { name: name },
-        dataType: "json",
-        success: function(data){
-        	for ( i = 0 ; i < tempData.nodes.length-1; i++){
-        		if (tempData.nodes[i].id == id){
-        			tempData.nodes[i].id = data.id;
-        			// change all edges that use old id
-        			for( j=0; j < tempData.edges.length-1; j++ ){
-        				if (tempData.edges[j].u == id){
-        					tempData.edges[j].u = data.id;
-        				}if(tempData.edges[j].v == id){
-        					tempData.edges[j].v = data.id;
-        				}
-        			}
-        			draw();
-        			break;
-        		}
-        	}
-        },failure: function(errMsg) {
-            alert(errMsg);
-        }
-  	});
+  	write.node('add',id,name);
 }
 
 function newEdge(to, from){
 	tempData.edges.push({"id": null, "v": to, "u": from});
 	draw();
-	$.ajax({
-        type: "POST",
-        url: dataPath + "/edge_change.json",
-        data: {op: 'add', to: to, from: from },
-        dataType: "json",
-        success: function(data){
-        	console.log(data);
-        },failure: function(errMsg) {
-            alert(errMsg);
-        }
-  	});
+	write.edge('add', to, from);
 }
 
 $(document).ready(function(){
@@ -395,15 +361,58 @@ function deleteNode(id){
 	}
 	tempData.nodes.splice(index, 1);
 	draw();
-	$.ajax({
-        type: "POST",
-        url: dataPath + "/edge_change.json",
-        data: {op: add, to: to, from: from },
-        dataType: "json",
-        success: function(data){
-        	console.log(data);
-        },failure: function(errMsg) {
-            alert(errMsg);
-        }
-  	});
+	write.node('remove', tempData.nodes[index].id);
 }
+
+write = {
+	'node': function( op, id, name ){
+		var hash = {
+	        type: "POST",
+	        url: dataPath + "/write.json",
+	        data: {type: 'node', op: op},
+	        dataType: "json"
+  		};
+  		if (typeof name !== 'undefined'){hash.data.name = name;}
+		if (op == 'add'){// when making a node, change the temporary id to the server given one.
+			hash.success = function(data){
+				var to, from;
+				var n = tempData.nodes;
+				var e = tempData.edges;
+				for ( i = 0 ; i < n.length-1; i++){
+	        		if (n[i].id == id){
+	        			//every time we encouner the old invalid id, replace it with data.id and write
+	        			n[i].id = data.id; //change edge id
+	        			for( j=0; j < e.length-1; j++ ){
+	        				if (e[j].u == n[i].id){// if the source uses old id
+	        					var oldSource = e[j].u, newSource = data.id, target = e[j].v;
+	        					write.edge('remove', target, oldSource); // remove the old edge
+							  	tempData.edges[j].u = data.id; // update tempData
+	        					write.edge('add', target, newSource); // add the new one
+							}if(e[j].v == n[i].id){// if target uses old id
+	        					var oldTarget = e[j].v, newTarget = data.id, source = e[j].u;
+	        					write.edge('remove', oldTarget, source); // remove the old edge
+							  	tempData.edges[j].v = data.id; // update tempData
+	        					write.edge('add', newTarget, source); // add the new one
+	        				}
+	        			}
+	        			draw();
+	        			break;
+	        		}
+	        	}
+	      	};
+		}
+		$.ajax(hash);
+	},'edge': function( op, to, from ){
+		$.ajax({
+	        type: "POST",
+	        url: dataPath + "/write.json",
+	        data: {type: 'edge', op: op, to: to, from: from },
+	        dataType: "json",
+	        success: function(data){
+	        	
+	        },failure: function(errMsg) {
+	            alert(errMsg);
+	        }
+  		});
+	}
+};
