@@ -20,8 +20,10 @@ class ProjectsController < ApplicationController
   before_action :set_project, except: [:index, :new, :create, :branch, :write]
   private
   def set_project
-    project = Project.dataset(ViewBranch.public).where(version: Integer(params[:id])).first
-    @project = project.with_this_context # All operations in the branch of this project
+    project = Project.dataset(ViewBranch.public)
+      .where(version: Integer(params[:id])).first
+    # All operations in the branch of this project
+    @project = project.with_this_context
   end
   public
 
@@ -43,7 +45,8 @@ class ProjectsController < ApplicationController
   end
 
   def branch
-    project = Project.dataset(ViewBranch.public).where(version: Integer(params[:id])).first
+    project = Project.dataset(ViewBranch.public)
+      .where(version: Integer(params[:id])).first
     new_project = project.clone(params[:project])
 
     redirect_to project_path(project), notice: 'Project was successfully cloned.'
@@ -77,13 +80,13 @@ class ProjectsController < ApplicationController
       end
       case params[:op]
         when 'add'
-        from.add_to(to)
+        @from.add_to(@to)
         # Remove from project, possibly full remove from db
         #if from.from.include?(@project)
 
         when 'remove'
         # Add to project if abandoned
-        from.remove_to(to)
+        @from.remove_to(@to)
       else
         raise "must specify action"
       end
@@ -114,7 +117,7 @@ class ProjectsController < ApplicationController
     get_data
       
     data = {
-      nodes: @nodes.map { |n| { id: n.version, value: {  label:  n.name } } },
+      nodes: @nodes.map { |n| { id: n.version, value: {  name:  n.name } } },
       edges: @edges
     }
 
@@ -124,17 +127,27 @@ class ProjectsController < ApplicationController
     end
   end
 
-  # Suggested new interface with just read GET request to fetch data
-  # and write POST request to write data.  Could be replaced with WebSocket in the future
-  # Message Format
-  #   type: Type of object (node or edge)
-  #     op: Operation on object (add or remove)
-  # If type is node
-  #     id: Unique identifier for object
-  #   name: Name of node
-  #   More to come as needed
-  # If type is edge
-  #    u,v: Refers to id of node
+  # GET request at /projects/NUMBER.json (calls show below)
+  #   returns an array of objects each with the following format.
+  # Message Format:
+  #   { 'type': 'node' or 'edge',   // Type of object
+  #       'op': 'add' or 'remove',  // Operation on object
+  #    . . .
+  #   If type is 'node':
+  #       'id': NUMBER,             // Unique identifier for object
+  #     'name': STRING,             // Name of node
+  #    . . .
+  #   If type is 'edge':
+  #        'u': NUMBER,             // Refers to 'id' of an existing node
+  #        'v': NUMBER,             // Refers to 'id' of an existing node
+  #   }
+  #
+  # Currently each id is a NUMBER which is unique for a given project but this
+  # is likely to change to an array of NUMBERs that is unique to the entire db.
+  #
+  # The URL should be determined from the 'data-path' attribute of the
+  # div#nodes-container.  For show append a .json to that path or requesting
+  # a json mime type without .json is likely to work.
   def show
     respond_to do |format|
       format.html {  }
@@ -142,16 +155,24 @@ class ProjectsController < ApplicationController
         get_data
         
         data = []
-        data += @nodes.map { |n| { type: :node, op: :add, id: n.version, name: n.name } }
-        data += @edges.map { |h| { type: :edge, op: :add }.merge(h) }
+        data += @nodes.map { |n| { type: :node,
+                                   op: :add,
+                                   id: n.version,
+                                   name: n.name } }
+        data += @edges.map { |h| { type: :edge,
+                                   op: :add }.merge(h) }
         
         render :json => data
       end
     end
   end 
 
-  # Pass json string in data parameter
-  # Untested
+  # POST request at /projects/NUMBER/write (calls write below)
+  # Append 'write' to the 'data-path' attribute to get URL
+  # Uses the same message format above passed to the 'data' parameter either an
+  # individual object or an array of objects.
+  # Must format data parameter as a valid JSON string
+  # Will return an array of objects in the same format as show
   def write
     data = ActiveSupport::JSON.decode(params[:data])
     if data.is_a?(Array)
@@ -169,8 +190,10 @@ class ProjectsController < ApplicationController
           v.downcase
         end
 
-        raise "Expected op to be add or remove: #{op}" unless %w(add remove).include?(op)
-        
+        unless %w(add remove).include?(op)
+          raise "Expected op to be add or remove: #{op}"
+        end
+
         resp = { type: type, op: op }
         
         case type
