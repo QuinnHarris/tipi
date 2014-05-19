@@ -206,11 +206,11 @@ class ProjectsController < ApplicationController
           else # remove
             id = hash.delete('id')
             raise "Expected id" unless id
-            
+
             node = Node.where(version: Integer(id)).first
             node.delete
           end
-          resp.merge(id: node.version, name: name) 
+          resp.merge(id: node.version, name: node.name)
           
         when 'edge'
           to, from = ['u', 'v'].map do |k|
