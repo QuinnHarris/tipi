@@ -354,14 +354,14 @@ function nodeTo(target){
 }
 function deleteNode(id){
 	var index;
-	for (i; i < tempData.nodes.length-1 ; i++){
-		if (tempData.nodes[i].id = id){
+	for (i = 0; i < tempData.nodes.length-1 ; i++){
+		if (tempData.nodes[i].id == id){
 			index = i;
 		}
 	}
 	tempData.nodes.splice(index, 1);
+	write.node('remove', id);
 	draw();
-	write.node('remove', tempData.nodes[index].id);
 }
 
 write = {
@@ -369,7 +369,7 @@ write = {
 		var hash = {
 	        type: "POST",
 	        url: dataPath + "/write.json",
-	        data: {type: 'node', op: op},
+	        data: {type: 'node', op: op, id: id},
 	        dataType: "json"
   		};
   		if (typeof name !== 'undefined'){hash.data.name = name;}
@@ -401,18 +401,18 @@ write = {
 	        	}
 	      	};
 		}
+		hash.data = { 'data': JSON.stringify(hash.data) };
 		$.ajax(hash);
 	},'edge': function( op, to, from ){
-		$.ajax({
-	        type: "POST",
-	        url: dataPath + "/write.json",
-	        data: {type: 'edge', op: op, to: to, from: from },
-	        dataType: "json",
-	        success: function(data){
-	        	
-	        },failure: function(errMsg) {
-	            alert(errMsg);
-	        }
-  		});
+		var hash = {
+		        type: "POST",
+		        url: dataPath + "/write.json",
+		        data: {type: 'edge', op: op, v: to, u: from },
+		        dataType: "json",
+		        success: function(data){
+		        }
+	       };
+	       hash.data = { 'data': JSON.stringify(hash.data) };
+		$.ajax(hash);
 	}
 };
