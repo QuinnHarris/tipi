@@ -198,14 +198,15 @@ class ProjectsController < ApplicationController
         
         case type
         when 'node'
-          name = hash.delete('name')
-          raise "Expected name" unless name
-          
           if op == 'add'
+            name = hash.delete('name')
+            raise "Expected name" unless name
+
             node = Node.create(name: name)
           else # remove
             id = hash.delete('id')
             raise "Expected id" unless id
+            
             node = Node.where(version: Integer(id)).first
             node.delete
           end
