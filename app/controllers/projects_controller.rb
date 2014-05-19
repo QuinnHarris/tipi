@@ -214,7 +214,11 @@ class ProjectsController < ApplicationController
           
         when 'edge'
           to, from = ['u', 'v'].map do |k|
-            Node.where(version: Integer(hash.delete(k))).first
+            value = hash.delete(k)
+            raise "Expected value for k" unless value
+            n = Node.where(version: Integer(value)).first
+            raise "Didn't find node #{value}" unless n
+            n
           end
           
           from.send("#{op}_to", to)
