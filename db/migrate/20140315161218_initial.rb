@@ -52,10 +52,10 @@ module Sequel
     end
 
     def create_many_to_many_version_table(table_name, options = {}, &block)
-      create_version_table :edges, no_record: true, no_branch: options[:cross_branch] do
+      create_version_table :edges, no_record: true, no_branch: options[:inter_branch] do
         fgn_keys = [:from, :to].map do |aspect|
           rows = %w(record_id branch_path branch_id).map { |n| :"#{aspect}_#{n}" }
-          rows.pop unless options[:cross_branch]
+          rows.pop unless options[:inter_branch]
           record_id, branch_path, branch_id = rows
           # must be in set of record_ids on nodes but record_ids is not unique
           Integer record_id, null: false
@@ -151,7 +151,7 @@ CREATE CONSTRAINT TRIGGER cycle_test
       String        :data, text: true
     end
 
-    create_many_to_many_version_table(:edges)
+    create_many_to_many_version_table(:edges) #, inter_branch: true)
 
     create_table :instances do
       primary_key :id

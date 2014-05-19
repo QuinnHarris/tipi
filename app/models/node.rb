@@ -100,23 +100,26 @@ class Node < Sequel::Model
        end)
 
     define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
-      cross_branch = false
+      inter_branch = false
 
       ctx = current_context(branch, false)
       
       ctx.not_included!(self)
-      ctx.not_included!(node) unless cross_branch
+      ctx.not_included!(node) unless inter_branch
 
-      h = { :branch_id => ctx.branch.id,
-        :"#{aspect}_record_id" => record_id,
-        :"#{aspect}_branch_path" => branch_path,
-        :"#{opposite}_record_id" => node.record_id,
-        :"#{opposite}_branch_path" => node.branch_path,
-        :created_at => self.class.dataset.current_datetime,
-        :deleted => deleted ? true : false}
-
-      h.merge!( :"#{aspect}_branch_id" => ctx.id,
-                :"#{opposite}_branch_id" => node.context.id ) if cross_branch
+      h = if inter_branch
+        { :"#{aspect}_branch_id" => ctx.id,
+          :"#{opposite}_branch_id" => node.context.id }
+      else
+        { :branch_id => ctx.branch.id }
+      end
+      
+      h.merge!(:"#{aspect}_record_id" => record_id,
+               :"#{aspect}_branch_path" => branch_path,
+               :"#{opposite}_record_id" => node.record_id,
+               :"#{opposite}_branch_path" => node.branch_path,
+               :created_at => self.class.dataset.current_datetime,
+               :deleted => deleted ? true : false)
       
       Edge.dataset.insert(h)
     end
