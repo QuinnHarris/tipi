@@ -134,12 +134,15 @@ class ProjectsController < ApplicationController
   #       'op': 'add' or 'remove',  // Operation on object
   #    . . .
   #   If type is 'node':
-  #       'id': NUMBER,             // Unique identifier for object
+  #       'id': NUMBER,             // Unique server identifier for object
+  #      'sid': ANYTHING            // Unique client session identifier
   #     'name': STRING,             // Name of node
   #    . . .
   #   If type is 'edge':
   #        'u': NUMBER,             // Refers to 'id' of an existing node
+  #       'su': ANYTHING            // Refers to 'sid' of an existing node
   #        'v': NUMBER,             // Refers to 'id' of an existing node
+  #       'sv': ANYTHING,           // Refers to 'sid' of an existing node
   #   }
   #
   # Currently each id is a NUMBER which is unique for a given project but this
@@ -181,11 +184,13 @@ class ProjectsController < ApplicationController
     else
       raise "Expected Array or Hash"
     end
+    session_objects = {}
     response = []
     @project.context do
       response = data.map do |hash|
-        type, op = %w(type op).map do |k|
-          v = hash.delete(k)
+        keys = %w(type op)
+        type, op = keys.map do |k|
+          v = hash[k]
           raise "Expected #{k} got #{hash.inspect}" unless v
           v.downcase
         end
@@ -193,39 +198,54 @@ class ProjectsController < ApplicationController
         unless %w(add remove).include?(op)
           raise "Expected op to be add or remove: #{op}"
         end
-
-        resp = { type: type, op: op }
         
-        case type
+        resp = case type
         when 'node'
           if op == 'add'
-            name = hash.delete('name')
+            name = hash['name']
             raise "Expected name" unless name
+            keys << 'name'
 
             node = Node.create(name: name)
+            session_objects[hash['sid']] = node if hash['sid']
           else # remove
-            id = hash.delete('id')
+            id = hash['id']
             raise "Expected id" unless id
+            keys << 'id'
 
             node = Node.where(version: Integer(id)).first
             node.delete
           end
-          resp.merge(id: node.version, name: node.name)
+          hash.merge('id' => node.version, 'name' => node.name)
           
         when 'edge'
-          to, from = ['u', 'v'].map do |k|
-            value = hash.delete(k)
-            raise "Expected value for k" unless value
-            n = Node.where(version: Integer(value)).first
-            raise "Didn't find node #{value}" unless n
+          to, from = %w(u v).map do |k|
+            if value = hash[k]
+              n = Node.where(version: Integer(value)).first
+              raise "Didn't find node #{value}" unless n
+              keys << k
+            elsif sid = hash["s#{k}"]
+              raise "Unexpected session reference on remove" if op == 'remove'
+              n = session_objects[sid]
+              raise "Couldn't find session object" unless n
+              keys << "s#{k}"
+            else
+              raise "Expected value for #{k} or s#{k}"
+            end
             n
           end
           
           from.send("#{op}_to", to)
-          resp.merge(u: to.version, v: from.version)
+          hash.merge('u' => to.version, 'v' => from.version)
         else
           raise "Expected type to be Node or Edge"
-        end      
+        end
+
+        unless (unexp = (hash.keys - keys)).empty?
+          logger.warn("Unexpected properties #{unexp.join(',')} in #{hash.inspect}")
+        end
+
+        resp
       end
     end
 
