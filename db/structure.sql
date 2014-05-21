@@ -140,6 +140,23 @@ CREATE SEQUENCE version_seq
 
 
 --
+-- Name: edge_inters; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE edge_inters (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    from_record_id integer NOT NULL,
+    from_branch_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_record_id integer NOT NULL,
+    to_branch_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
 -- Name: edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -351,6 +368,22 @@ ALTER TABLE ONLY branches
 
 
 --
+-- Name: edge_inters_from_record_id_from_branch_path_from_branch_id__key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY edge_inters
+    ADD CONSTRAINT edge_inters_from_record_id_from_branch_path_from_branch_id__key UNIQUE (from_record_id, from_branch_path, from_branch_id, to_record_id, to_branch_path, to_branch_id, deleted);
+
+
+--
+-- Name: edge_inters_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY edge_inters
+    ADD CONSTRAINT edge_inters_pkey PRIMARY KEY (version);
+
+
+--
 -- Name: edges_from_record_id_from_branch_path_to_record_id_to_branc_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -404,6 +437,20 @@ ALTER TABLE ONLY schema_migrations
 
 ALTER TABLE ONLY users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: edge_inters_from_record_id_from_branch_path_from_branch_id_inde; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX edge_inters_from_record_id_from_branch_path_from_branch_id_inde ON edge_inters USING btree (from_record_id, from_branch_path, from_branch_id);
+
+
+--
+-- Name: edge_inters_to_record_id_to_branch_path_to_branch_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX edge_inters_to_record_id_to_branch_path_to_branch_id_index ON edge_inters USING btree (to_record_id, to_branch_path, to_branch_id);
 
 
 --
@@ -499,6 +546,22 @@ ALTER TABLE ONLY branch_relations
 
 ALTER TABLE ONLY branch_relations
     ADD CONSTRAINT branch_relations_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
+
+
+--
+-- Name: edge_inters_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY edge_inters
+    ADD CONSTRAINT edge_inters_from_branch_id_fkey FOREIGN KEY (from_branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: edge_inters_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY edge_inters
+    ADD CONSTRAINT edge_inters_to_branch_id_fkey FOREIGN KEY (to_branch_id) REFERENCES branches(id);
 
 
 --
