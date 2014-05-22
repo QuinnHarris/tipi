@@ -46,8 +46,8 @@ module DatasetBranchContext
       exp = Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
       if options[:context_column]
-        exp &= Sequel.expr(:context_id => :in_context) |
-            Sequel.expr(:context_id => options[:context_columm])
+        exp &= (Sequel.expr(:context_id => nil) & :in_context) |
+            Sequel.expr(:context_id => options[:context_column])
       end
       exp
     end

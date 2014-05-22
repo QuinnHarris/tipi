@@ -192,4 +192,21 @@ describe Branch do
     end
   end
 
+  it "can make interbranch edges" do
+    node_a = node_b = nil
+    br_a = Branch.create(name: 'Branch A') do
+      node_a = Node.create(name: 'Node A')
+    end
+
+    br_b = Branch.create(name: 'Branch B') do
+      node_b = Node.create(name: 'Node B')
+      node_b.add_from_inter(node_a)
+      expect(node_b.from_inter).to eq([node_a])
+    end
+
+    br_a.context do
+      expect(node_a.to_inter).to eq([node_b])
+    end
+  end
+
 end

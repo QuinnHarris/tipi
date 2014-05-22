@@ -36,12 +36,14 @@ class Node < Sequel::Model
 
   # Need to develop custom has_many relations for versioning
   [[:edges, false], [:edge_inters, true]].each do |join_table, inter_branch|
-  aspects = inter_branch ? [:from_inter, :to_inter] : [:from, :to]
+  aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
-    many_to_many aspect, join_table: join_table, :class => self,
-                         reciprocal: opposite,
-                         left_key: [:"#{aspect}_record_id"], #, :"#{aspect}_branch_path"],
-                         right_key: [:"#{opposite}_record_id"], #, :"#{opposite}_branch_path"],
+    relation_name = :"#{aspect}#{inter_branch ? '_inter' : ''}"
+    many_to_many relation_name,
+                 join_table: join_table, :class => self,
+                 reciprocal: opposite,
+                 left_key: [:"#{aspect}_record_id"], #, :"#{aspect}_branch_path"],
+                 right_key: [:"#{opposite}_record_id"], #, :"#{opposite}_branch_path"],
       :select => nil, # Don't override our select statements
       :dataset => (proc do |r|
         current_context.not_included_or_duplicated!(context, false)
@@ -61,22 +63,22 @@ class Node < Sequel::Model
                             edge_src_path)
 
           if inter_branch
-            table_common = :connect_table
+            table_common = r[:join_table] #:connect_table
 
             # Determine if the connecting node is within the same context
             # Only relevant for inter_branch links
-            ds_common = ds.select_append(Sequel.expr(:"#{opposite}_branch_id")
-                                         .in?(db[context_data]
-                                              .select(:branch_id))
+            ds_common = ds.select_append(Sequel.expr(:"#{opposite}_branch_id" =>
+                                                         db[context_data]
+                                                         .select(:branch_id))
                                          .as(:in_context))
 
-            ds = db.from(table_common)
+            ds = dataset.from(table_common)
 
             ds_br = Branch.context_dataset_from_set(ds.exclude(:in_context),
                                                     :"#{opposite}_branch_id")
             context_data = ds_br.union(
                 db.from(context_data)
-                .select_append(Sequel.as(false, :context_id)))
+                .select_append(Sequel.as(nil, :context_id)))
           end
 
           # Join final nodes
@@ -124,7 +126,7 @@ class Node < Sequel::Model
         end
       end)
 
-    define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
+    define_method "_add_#{relation_name}" do |node, branch = nil, deleted = nil|
       ctx = current_context(branch, false)
       
       ctx.not_included!(self)
@@ -144,10 +146,11 @@ class Node < Sequel::Model
                :created_at => self.class.dataset.current_datetime,
                :deleted => deleted ? true : false)
       
-      Edge.dataset.insert(h)
+      db[join_table].insert(h)
+      #Edge.dataset.insert(h)
     end
 
-    define_method "_remove_#{aspect}" do |node, branch = nil|
+    define_method "_remove_#{relation_name}" do |node, branch = nil|
       # !!! Must check if the object actually exists
       send("_add_#{aspect}", node, branch, true)
     end

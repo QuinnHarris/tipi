@@ -410,6 +410,7 @@ class Branch < Sequel::Model
     ds = db[cte_table].with_recursive(cte_table, base_ds, r_ds)
       .select(:branch_id, :successor_id, :version, :depth, :branch_path)
     ds = ds.select_append(:name) if use_context_name?
+    ds = ds.select_append(:context_id) if include_context
     ds
   end
 
