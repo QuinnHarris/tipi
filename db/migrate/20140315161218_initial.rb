@@ -52,7 +52,7 @@ module Sequel
     end
 
     def create_many_to_many_version_table(table_name, options = {}, &block)
-      create_version_table :edges, no_record: true, no_branch: options[:inter_branch] do
+      create_version_table table_name, no_record: true, no_branch: options[:inter_branch] do
         fgn_keys = [:from, :to].map do |aspect|
           rows = %w(record_id branch_path branch_id).map { |n| :"#{aspect}_#{n}" }
           rows.pop unless options[:inter_branch]
@@ -151,7 +151,9 @@ CREATE CONSTRAINT TRIGGER cycle_test
       String        :data, text: true
     end
 
-    create_many_to_many_version_table(:edges) #, inter_branch: true)
+    create_many_to_many_version_table(:edges)
+
+    create_many_to_many_version_table(:edge_inters, inter_branch: true)
 
     create_table :instances do
       primary_key :id

@@ -35,72 +35,96 @@ class Node < Sequel::Model
   include Versioned
 
   # Need to develop custom has_many relations for versioning
-  aspects = [:from, :to]
+  [[:edges, false], [:edge_inters, true]].each do |join_table, inter_branch|
+  aspects = inter_branch ? [:from_inter, :to_inter] : [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
-    many_to_many aspect, join_table: :edges, :class => self, reciprocal: opposite,
+    many_to_many aspect, join_table: join_table, :class => self,
+                         reciprocal: opposite,
                          left_key: [:"#{aspect}_record_id"], #, :"#{aspect}_branch_path"],
                          right_key: [:"#{opposite}_record_id"], #, :"#{opposite}_branch_path"],
-    :select => nil, # Don't override our select statements
-    :dataset =>
-      (proc do |r|
-         current_context.not_included_or_duplicated!(context, false)
-         current_context.dataset do |branch_context_data|
-           inter_branch = false
-           dataset = r.associated_class.raw_dataset
+      :select => nil, # Don't override our select statements
+      :dataset => (proc do |r|
+        current_context.not_included_or_duplicated!(context, false)
+        current_context.dataset do |context_data|
+          dataset = r.associated_class.raw_dataset
 
-           
-           # Assuming this node is the latest in the current branch context
-           edge_dst_path = Sequel.pg_array(:"#{opposite}_branch_path")
-           ds = dataset.join(r[:join_table],
-                             :"#{opposite}_record_id" => :record_id)
-           # Exclude based on branch_path later as it needs to be concatenated with branch table
-           
-           edge_src_path = Sequel.pg_array(:"#{aspect}_branch_path")
-           this_branch_path = Sequel.pg_array_op(branch_path) # Already concatenated with branch table
-           ds = ds.where(:"#{aspect}_record_id" => record_id,
-                         this_branch_path[ExRange.new(1, Sequel.function(:coalesce,
-                                                                         edge_src_path.length,
-                                                                         0))] =>
-                         edge_src_path)
-           
-           # Must check to from branch context if there is a version lock
-           tables = [r[:join_table], :nodes]
-           tables.each do |table|
-             ds = ds.join_branch(branch_context_data,
-                                 join_table: table,
-                                 table_alias: :"branch_#{table}")
-           end
 
-           # Exclude based on branch_path here
-           branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
-             .pg_array.concat(Sequel.qualify(:nodes, :branch_path) )
-           ds = ds.where(branch_path_select[ExRange.new(1, Sequel.function(:coalesce,
-                                                                           edge_dst_path.length,
-                                                                           0))] =>
-                         edge_dst_path
-                         )
-           
-           ds = ds.select(*(r.associated_class.columns - [:branch_path]).map do |n|
-                            Sequel.qualify(:nodes, n) end,
-                          branch_path_select.as(:branch_path),
-                          Sequel.as(Sequel.qualify(r[:join_table], :deleted),
-                                    :join_deleted),
-                          Sequel.function(:rank)
-                            .over(:partition => [:record_id, branch_path_select],
-                                  :order => tables.map do |t|
-                                    [Sequel.qualify("branch_#{t}", :depth), 
-                                     Sequel.qualify(t, :version).desc]
-                                  end.flatten ) )
+          ds = dataset.from(r[:join_table])
 
-           dataset.from(ds)
-             .where(:rank => 1, :deleted => false, :join_deleted => false)
-             .select(*r.associated_class.columns)
-         end
-       end)
+          # Select edges connected to this node
+          edge_src_path = Sequel.pg_array(:"#{aspect}_branch_path")
+          this_branch_path = Sequel.pg_array_op(branch_path)
+          ds = ds.where(:"#{aspect}_record_id" => record_id,
+                      this_branch_path[ExRange.new(1, Sequel.function(:coalesce,
+                                                          edge_src_path.length,
+                                                          0))] =>
+                            edge_src_path)
+
+          if inter_branch
+            table_common = :connect_table
+
+            # Determine if the connecting node is within the same context
+            # Only relevant for inter_branch links
+            ds_common = ds.select_append(Sequel.expr(:"#{opposite}_branch_id")
+                                         .in?(db[context_data]
+                                              .select(:branch_id))
+                                         .as(:in_context))
+
+            ds = db.from(table_common)
+
+            ds_br = Branch.context_dataset_from_set(ds.exclude(:in_context),
+                                                    :"#{opposite}_branch_id")
+            context_data = ds_br.union(
+                db.from(context_data)
+                .select_append(Sequel.as(false, :context_id)))
+          end
+
+          # Join final nodes
+          ds = ds.join(:nodes, :record_id => :"#{opposite}_record_id")
+
+          # Join branch context table(s)
+          tables = [:nodes]
+          tables.unshift(r[:join_table]) unless inter_branch
+          tables.each do |table|
+            ds = ds.join_branch(
+                   context_data,
+                   context_column: inter_branch && :"#{opposite}_branch_id",
+                   join_table: table,
+                   table_alias: :"branch_#{table}")
+          end
+
+          # Exclude final nodes based on branch_path
+          edge_dst_path = Sequel.pg_array(:"#{opposite}_branch_path")
+          branch_path_select =
+              Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
+              .pg_array.concat(Sequel.qualify(:nodes, :branch_path))
+          ds = ds.where(
+              branch_path_select[ExRange.new(1, Sequel.function(:coalesce,
+                                                    edge_dst_path.length,
+                                                    0))] =>
+                  edge_dst_path)
+
+          ds = ds.select(*(r.associated_class.columns-[:branch_path]).map { |n|
+                             Sequel.qualify(:nodes, n) },
+                         branch_path_select.as(:branch_path),
+                         Sequel.as(Sequel.qualify(r[:join_table], :deleted),
+                                   :join_deleted),
+                         Sequel.function(:rank)
+                         .over(:partition => [:record_id, branch_path_select],
+                               :order => tables.map do |t|
+                                 [Sequel.qualify("branch_#{t}", :depth),
+                                  Sequel.qualify(t, :version).desc]
+                               end.flatten))
+
+          ds = ds.with(table_common, ds_common) if inter_branch
+
+          dataset.from(ds)
+            .where(:rank => 1, :deleted => false, :join_deleted => false)
+            .select(*r.associated_class.columns)
+        end
+      end)
 
     define_method "_add_#{aspect}" do |node, branch = nil, deleted = nil|
-      inter_branch = false
-
       ctx = current_context(branch, false)
       
       ctx.not_included!(self)
@@ -129,6 +153,7 @@ class Node < Sequel::Model
     end
 
     # _remove_ and _remove_all_
+  end
   end
 end
 

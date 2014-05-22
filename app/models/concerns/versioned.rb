@@ -43,8 +43,13 @@ module DatasetBranchContext
         Sequel.qualify(options[:join_table], :branch_id) : :branch_id
 
     join(context_data, { :branch_id => join_column }, options) do |j, lj|
-      Sequel.expr(Sequel.qualify(j, :version) => nil) |
+      exp = Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
+      if options[:context_column]
+        exp &= Sequel.expr(:context_id => :in_context) |
+            Sequel.expr(:context_id => options[:context_columm])
+      end
+      exp
     end
   end
 

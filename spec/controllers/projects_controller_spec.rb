@@ -29,7 +29,7 @@ describe ProjectsController do
       resp_data = response_json
       expect(resp_data).to have(1).items
 
-      node_data = resp_data.first.symbolize_keys
+      node_data = resp_data.first
       expect(node_data[:id]).to be      
       expect(node_data).to eq({ id: node_data[:id] }.merge(node_attr))
       
@@ -74,5 +74,21 @@ describe ProjectsController do
     # Retrieve Data
     get :show, { id: project.version, format: :json }
     expect(response_json).to match_array(data)
+
+    # Add Node and Edge in one request
+    source_id = 1
+    node_attr = attributes_for(:node_ajax, sid: source_id)
+    edge_attr = attributes_for(:edge_ajax, u: node_1_id, sv: source_id)
+    request = [node_attr, edge_attr]
+    post :write, { id: project.version, data: ActiveSupport::JSON.encode(request) }
+    resp_data = response_json
+    expect(resp_data).to have(2).items
+
+    expect(resp_data.first[:id]).to be
+    expect(resp_data.first).to include(node_attr)
+
+    expect(resp_data.last[:v]).to eq(resp_data.first[:id])
+    expect(resp_data.last).to include(edge_attr)
+
   end
 end
