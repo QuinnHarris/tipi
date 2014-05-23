@@ -19,7 +19,7 @@
 	// add scrolling
 	// add moving text if title is to long
 	// button for delegate to team
-	// animate transition
+	// double click and activeNode link behavior
 //initialize svg (d3)
 var svg;
 var backdrop;

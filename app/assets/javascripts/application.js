@@ -15,6 +15,7 @@
 //= require turbolinks
 //= require foundation
 //= require d3
+//= require froala_editor.min.js
 //= require dagre-d3
 //= require alertify
 //= require_tree .

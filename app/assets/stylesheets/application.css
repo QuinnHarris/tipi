@@ -12,6 +12,7 @@
  *
  *= require foundation_and_overrides
  *= require foundation
+ *= require froala_editor.min.css
  *= require alertify/core
  *= require alertify/default
  *= require_tree .
