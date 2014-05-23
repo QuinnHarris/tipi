@@ -131,12 +131,13 @@ class ProjectsController < ApplicationController
   #   returns an array of objects each with the following format.
   # Message Format:
   #   { 'type': 'node' or 'edge',   // Type of object
-  #       'op': 'add' or 'remove',  // Operation on object
+  #       'op': 'add', 'change' or 'remove',  // Operation on object
   #    . . .
   #   If type is 'node':
   #       'id': NUMBER,             // Unique server identifier for object
   #      'cid': ANYTHING            // Unique client session identifier
   #     'name': STRING,             // Name of node
+  #      'doc': STRING,             // String of document
   #    . . .
   #   If type is 'edge':
   #        'u': NUMBER,             // Refers to 'id' of an existing node
@@ -147,6 +148,10 @@ class ProjectsController < ApplicationController
   #
   # Currently each id is a NUMBER which is unique for a given project but this
   # is likely to change to an array of NUMBERs that is unique to the entire db.
+  #
+  # The change operation will return a new id.  The server id represents a
+  # specific version of an object.  Will later send record_id relating different
+  # versions of an object together.
   #
   # The URL should be determined from the 'data-path' attribute of the
   # div#nodes-container.  For show append a .json to that path or requesting
