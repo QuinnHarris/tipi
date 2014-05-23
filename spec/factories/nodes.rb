@@ -7,6 +7,7 @@ FactoryGirl.define do
       type  'node'
       op    'add'
       sequence(:name) { |n| "Node #{n}" }
+      sequence(:doc) { |n| "Important Document #{n}" }
     end
   end
 

@@ -161,7 +161,7 @@ class ProjectsController < ApplicationController
         data += @nodes.map { |n| { type: :node,
                                    op: :add,
                                    id: n.version,
-                                   name: n.name } }
+                                   name: n.name, doc: n.doc } }
         data += @edges.map { |h| { type: :edge,
                                    op: :add }.merge(h) }
         
@@ -195,30 +195,42 @@ class ProjectsController < ApplicationController
           v.downcase
         end
 
-        unless %w(add remove).include?(op)
+        unless %w(add remove change).include?(op)
           raise "Expected op to be add or remove: #{op}"
         end
-        
+       
         resp = case type
         when 'node'
-          if op == 'add'
-            name = hash['name']
-            raise "Expected name" unless name
-            keys << 'name'
+          fields = {}
+          if %w(add change).include?(op)
+            %w(name doc).each do |k|
+              next unless hash[k]
+              fields[k] = hash[k]
+              keys << k
+            end
+            raise "Expected name or doc" if fields.empty?
+          end
 
-            node = Node.create(name: name)
+          if op == 'add'
+            raise "Name required" unless fields['name']
+            node = Node.create(fields)
             session_objects[hash['cid']] = node if hash['cid']
-          else # remove
+          else
             id = hash['id']
             raise "Expected id" unless id
             keys << 'id'
 
             node = Node.where(version: Integer(id)).first
-            node.delete
+            if op == 'remove'
+              node.delete
+            else
+              node = node.create(fields)
+            end
           end
-          hash.merge('id' => node.version, 'name' => node.name)
+          hash.merge('id' => node.version).merge(fields)
           
         when 'edge'
+          raise "Change not supported on edge" if op == 'change'
           to, from = %w(u v).map do |k|
             if value = hash[k]
               n = Node.where(version: Integer(value)).first

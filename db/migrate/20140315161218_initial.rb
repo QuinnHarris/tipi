@@ -69,7 +69,7 @@ module Sequel
 
         instance_eval(&block) if block_given?
 
-        unique fgn_keys + [:deleted]
+        #unique fgn_keys + [:deleted]
       end
     end
   end
@@ -148,6 +148,7 @@ CREATE CONSTRAINT TRIGGER cycle_test
       String        :type, null: false
       
       String        :name, null: false
+      String        :doc,  text: true
       String        :data, text: true
     end
 

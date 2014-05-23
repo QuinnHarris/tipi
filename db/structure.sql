@@ -231,6 +231,7 @@ CREATE TABLE nodes (
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
     name text NOT NULL,
+    doc text,
     data text,
     deleted boolean DEFAULT false NOT NULL
 );
@@ -368,27 +369,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edge_inters_from_record_id_from_branch_path_from_branch_id__key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY edge_inters
-    ADD CONSTRAINT edge_inters_from_record_id_from_branch_path_from_branch_id__key UNIQUE (from_record_id, from_branch_path, from_branch_id, to_record_id, to_branch_path, to_branch_id, deleted);
-
-
---
 -- Name: edge_inters_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY edge_inters
     ADD CONSTRAINT edge_inters_pkey PRIMARY KEY (version);
-
-
---
--- Name: edges_from_record_id_from_branch_path_to_record_id_to_branc_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_record_id_from_branch_path_to_record_id_to_branc_key UNIQUE (from_record_id, from_branch_path, to_record_id, to_branch_path, deleted);
 
 
 --

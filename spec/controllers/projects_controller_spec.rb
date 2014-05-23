@@ -77,18 +77,26 @@ describe ProjectsController do
 
     # Add Node and Edge in one request
     source_id = 1
-    node_attr = attributes_for(:node_ajax, sid: source_id)
-    edge_attr = attributes_for(:edge_ajax, u: node_1_id, sv: source_id)
+    node_attr = attributes_for(:node_ajax, cid: source_id)
+    edge_attr = attributes_for(:edge_ajax, u: node_1_id, cv: source_id)
     request = [node_attr, edge_attr]
     post :write, { id: project.version, data: ActiveSupport::JSON.encode(request) }
     resp_data = response_json
     expect(resp_data).to have(2).items
 
+    node_3_id = resp_data.first[:id]
     expect(resp_data.first[:id]).to be
     expect(resp_data.first).to include(node_attr)
 
     expect(resp_data.last[:v]).to eq(resp_data.first[:id])
     expect(resp_data.last).to include(edge_attr)
 
+    # Change a node
+    node_attr = attributes_for(:node_ajax, op: 'change', id: node_3_id)
+    post :write, { id: project.version, data: ActiveSupport::JSON.encode(node_attr) }
+    resp_data = response_json
+    expect(resp_data).to have(1).items
+    expect(resp_data.first[:id]).to be > node_attr[:id]
+    expect(resp_data.first).to eq(node_attr.merge(id: resp_data.first[:id]))
   end
 end

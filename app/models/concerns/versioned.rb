@@ -169,6 +169,7 @@ module Versioned
 
       @context = BranchContext.get(check_context_specifier(values), false)
 
+      values = values.dup
       values.delete(:context)
       values[:branch] = @context.branch_nil
       values[:branch_id] = @context.id

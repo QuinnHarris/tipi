@@ -131,11 +131,12 @@ describe Branch do
       expect(node_b.to).to eq([])
       expect(node_b.from).to eq([node_a])
     end
-    
-    br_a.context do
-      # In own context because failure aborts transaction
-      expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_record_id_from_branch_path_to_record_id_to/)
-    end
+ 
+#    !!!! Need a duplicate add check but unique constraint doesn't work because of add remove then add possibility   
+#    br_a.context do
+#      # In own context because failure aborts transaction
+#      expect { node_a.add_to(node_b) }.to raise_error(Sequel::UniqueConstraintViolation, /\"edges_from_record_id_from_branch_path_to_record_id_to/)
+#    end
 
     br_b = br_a.fork(name: 'Branch B') do
       node_c = Node.create(name: 'Node C')
@@ -193,7 +194,7 @@ describe Branch do
   end
 
   it "can make interbranch edges" do
-    node_a = node_b = nil
+    node_a = node_b = node_c = nil
     br_a = Branch.create(name: 'Branch A') do
       node_a = Node.create(name: 'Node A')
     end
@@ -206,6 +207,23 @@ describe Branch do
 
     br_a.context do
       expect(node_a.to_inter).to eq([node_b])
+      node_c = Node.create(name: 'Node C')
+      node_a.add_to_inter(node_c)
+      expect(node_a.to_inter).to match_array([node_b, node_c])
+    end
+
+    br_c = br_a.fork(name: 'Branch C (of A)') do
+      node_c.delete
+      expect(node_a.to_inter).to eq([node_b])
+    end
+
+    br_a.context do
+      expect(node_a.to_inter).to match_array([node_b, node_c])
+    end
+
+    br_d = Branch.merge(br_b, br_c, name: 'Branch D (of B C)') do
+      node_b.delete
+      expect(node_a.to_inter).to eq([])
     end
   end
 
