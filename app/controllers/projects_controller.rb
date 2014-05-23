@@ -117,7 +117,7 @@ class ProjectsController < ApplicationController
     get_data
       
     data = {
-      nodes: @nodes.map { |n| { id: n.version, value: {  name:  n.name } } },
+      nodes: @nodes.map { |n| { value: {cid: n.version, name:  n.name } } },
       edges: @edges
     }
 
@@ -135,14 +135,14 @@ class ProjectsController < ApplicationController
   #    . . .
   #   If type is 'node':
   #       'id': NUMBER,             // Unique server identifier for object
-  #      'sid': ANYTHING            // Unique client session identifier
+  #      'cid': ANYTHING            // Unique client session identifier
   #     'name': STRING,             // Name of node
   #    . . .
   #   If type is 'edge':
   #        'u': NUMBER,             // Refers to 'id' of an existing node
-  #       'su': ANYTHING            // Refers to 'sid' of an existing node
+  #       'cu': ANYTHING            // Refers to 'cid' of an existing node
   #        'v': NUMBER,             // Refers to 'id' of an existing node
-  #       'sv': ANYTHING,           // Refers to 'sid' of an existing node
+  #       'cv': ANYTHING,           // Refers to 'cid' of an existing node
   #   }
   #
   # Currently each id is a NUMBER which is unique for a given project but this
@@ -207,7 +207,7 @@ class ProjectsController < ApplicationController
             keys << 'name'
 
             node = Node.create(name: name)
-            session_objects[hash['sid']] = node if hash['sid']
+            session_objects[hash['cid']] = node if hash['cid']
           else # remove
             id = hash['id']
             raise "Expected id" unless id
@@ -224,13 +224,13 @@ class ProjectsController < ApplicationController
               n = Node.where(version: Integer(value)).first
               raise "Didn't find node #{value}" unless n
               keys << k
-            elsif sid = hash["s#{k}"]
+            elsif cid = hash["c#{k}"]
               raise "Unexpected session reference on remove" if op == 'remove'
-              n = session_objects[sid]
+              n = session_objects[cid]
               raise "Couldn't find session object" unless n
-              keys << "s#{k}"
+              keys << "c#{k}"
             else
-              raise "Expected value for #{k} or s#{k}"
+              raise "Expected value for #{k} or c#{k}"
             end
             n
           end
