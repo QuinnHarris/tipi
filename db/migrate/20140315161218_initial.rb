@@ -102,7 +102,7 @@ Sequel.migration do
       check { predecessor_id != successor_id }
     end
 
-    # Use stored proceedure and trigger to test for cycles
+    # Use stored procedure and trigger to test for cycles
     # This will not detect cycles when two transactions are opened
     # simultaneously that together insert rows causing a cycle
     run %(
