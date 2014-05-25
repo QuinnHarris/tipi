@@ -57,75 +57,6 @@ class ProjectsController < ApplicationController
     redirect_to categories_url, notice: 'Project was successfully deleted'
   end
 
-  # JSON call to create a new node
-  # PUT call with name paramater
-  # returns id and name
-  # creator_project_node_new_path(project, format: :json)
-  def node_new
-    @project.context do
-      @node = @project.add_to(Node.create(name: params[:name]))
-    end
-    respond_to do |format|
-      format.json { render :json => { id: @node.version, name: @node.name } }
-    end
-  end
-
-  # JSON call to add and remove edges
-  # PUT call with to and from and op paramater
-  # creator_project_edge_change_path(project, format: :json)
-  def edge_change
-    @project.context do
-      @to, @from = [:to, :from].map do |k|
-        Node.where(version: Integer(params[k])).first
-      end
-      case params[:op]
-        when 'add'
-        @from.add_to(@to)
-        # Remove from project, possibly full remove from db
-        #if from.from.include?(@project)
-
-        when 'remove'
-        # Add to project if abandoned
-        @from.remove_to(@to)
-      else
-        raise "must specify action"
-      end
-    end
-    respond_to do |format|
-      format.json { render :json => { to: @to.version, from: @from.version } }
-    end
-  end
-
-  # or should we use a single json input interface to modify nodes?
-  
-  # creator_project_nodes_path(project, format: :json) 
-  def get_data
-    @edges = []
-
-    @project.context do
-      @nodes = Node.exclude(:type => 'Project').all
-
-      @nodes.each do |n|
-        n.to.each do |to|
-          @edges << { v: n.version, u: to.version }
-        end
-      end
-    end
-  end
-
-  def nodes
-    get_data
-      
-    data = {
-      nodes: @nodes.map { |n| { value: {cid: n.version, name:  n.name } } },
-      edges: @edges
-    }
-
-    respond_to do |format|
-      format.xml  { render  :xml => data }
-      format.json { render :json => data }
-    end
-  end
 
   # GET request at /projects/NUMBER.json (calls show below)
   #   returns an array of objects each with the following format.
@@ -134,15 +65,16 @@ class ProjectsController < ApplicationController
   #       'op': 'add', 'change' or 'remove',  // Operation on object
   #    . . .
   #   If type is 'node':
-  #       'id': NUMBER,             // Unique server identifier for object
+  #       'id': INTEGER,            // Unique instance server identifier for object
   #      'cid': ANYTHING            // Unique client session identifier
+  #'record_id': INTEGER             // Unique record identifier, stays same with change
   #     'name': STRING,             // Name of node
   #      'doc': STRING,             // String of document
   #    . . .
   #   If type is 'edge':
-  #        'u': NUMBER,             // Refers to 'id' of an existing node
+  #        'u': INTEGER,            // Refers to 'id' of an existing node
   #       'cu': ANYTHING            // Refers to 'cid' of an existing node
-  #        'v': NUMBER,             // Refers to 'id' of an existing node
+  #        'v': INTEGER,            // Refers to 'id' of an existing node
   #       'cv': ANYTHING,           // Refers to 'cid' of an existing node
   #   }
   #
@@ -160,12 +92,23 @@ class ProjectsController < ApplicationController
     respond_to do |format|
       format.html {  }
       format.json do
-        get_data
+        @edges = []
+
+        @project.context do
+          @nodes = Node.exclude(:type => 'Project').all
+
+          @nodes.each do |n|
+            n.to.each do |to|
+              @edges << { v: n.version, u: to.version }
+            end
+          end
+        end
         
         data = []
         data += @nodes.map { |n| { type: :node,
                                    op: :add,
                                    id: n.version,
+                                   record_id: n.record_id,
                                    name: n.name, doc: n.doc } }
         data += @edges.map { |h| { type: :edge,
                                    op: :add }.merge(h) }
@@ -232,7 +175,8 @@ class ProjectsController < ApplicationController
               node = node.create(fields)
             end
           end
-          hash.merge('id' => node.version).merge(fields)
+          hash.merge('id' => node.version, 'record_id' => node.record_id)
+              .merge(fields)
           
         when 'edge'
           raise "Change not supported on edge" if op == 'change'

@@ -12,6 +12,11 @@ describe ProjectsController do
     array.map { |e| e.symbolize_keys }
   end
 
+  def write_request(id, data)
+    post :write, { id: id, data: ActiveSupport::JSON.encode(data) }
+    response_json
+  end
+
   it "can create and modify project" do
     # Create Project
     project_attrs = attributes_for(:project)
@@ -25,14 +30,13 @@ describe ProjectsController do
       node_attr = attributes_for(:node_ajax)
       #    expect(Node).to receive(:create).with(name: node_1_attr[:name]).once
 
-      post :write, { id: project.version, data: ActiveSupport::JSON.encode(node_attr) }
-      resp_data = response_json
+      resp_data = write_request(project.version, node_attr)
       expect(resp_data).to have(1).items
 
       node_data = resp_data.first
       expect(node_data[:id]).to be      
-      expect(node_data).to eq({ id: node_data[:id] }.merge(node_attr))
-      
+      expect(node_data).to eq(node_data.slice(:id, :record_id).merge(node_attr))
+
       node_data
     end
 
@@ -40,8 +44,7 @@ describe ProjectsController do
 
     # Create Edge
     edge_attr = attributes_for(:edge_ajax, u: node_1_id, v: node_2_id)
-    post :write, { id: project.version, data: ActiveSupport::JSON.encode(edge_attr) }
-    resp_data = response_json
+    resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
 
     data << (edge_data = resp_data.first.symbolize_keys)
@@ -54,8 +57,7 @@ describe ProjectsController do
     # Remove Edge
     data.delete(edge_attr)
     edge_attr.merge!(op: 'remove')
-    post :write, { id: project.version, data: ActiveSupport::JSON.encode(edge_attr) }
-    resp_data = response_json
+    resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
     expect(resp_data.first).to eq(edge_attr)
 
@@ -66,8 +68,7 @@ describe ProjectsController do
     # Remove Node
     node_attr = data.pop
     node_attr.merge!(op: 'remove')
-    post :write, { id: project.version, data: ActiveSupport::JSON.encode(node_attr) }
-    resp_data = response_json
+    resp_data = write_request(project.version, node_attr)
     expect(resp_data).to have(1).items
     expect(resp_data.first).to eq(node_attr)
 
@@ -80,8 +81,7 @@ describe ProjectsController do
     node_attr = attributes_for(:node_ajax, cid: source_id)
     edge_attr = attributes_for(:edge_ajax, u: node_1_id, cv: source_id)
     request = [node_attr, edge_attr]
-    post :write, { id: project.version, data: ActiveSupport::JSON.encode(request) }
-    resp_data = response_json
+    resp_data = write_request(project.version, request)
     expect(resp_data).to have(2).items
 
     node_3_id = resp_data.first[:id]
@@ -93,10 +93,9 @@ describe ProjectsController do
 
     # Change a node
     node_attr = attributes_for(:node_ajax, op: 'change', id: node_3_id)
-    post :write, { id: project.version, data: ActiveSupport::JSON.encode(node_attr) }
-    resp_data = response_json
+    resp_data = write_request(project.version, node_attr)
     expect(resp_data).to have(1).items
     expect(resp_data.first[:id]).to be > node_attr[:id]
-    expect(resp_data.first).to eq(node_attr.merge(id: resp_data.first[:id]))
+    expect(resp_data.first).to eq(node_attr.merge(resp_data.first.slice(:id, :record_id)))
   end
 end
