@@ -218,9 +218,9 @@ module Versioned
 
     # Should delete just be a row tag or an whole new table as this wastes alot of space
     # This approach simplifies and probably speeds up queries though
-    def delete(branch = nil)
+    def delete(values = {})
       # !!! Shouldn't be able to delete already deleted object
-      create(deleted: true, branch: branch)
+      create(values.merge(deleted: true))
     end
 
     # Check branch assignments are valid

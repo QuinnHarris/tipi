@@ -65,21 +65,26 @@ class ProjectsController < ApplicationController
   #       'op': 'add', 'change' or 'remove',  // Operation on object
   #    . . .
   #   If type is 'node':
-  #       'id': INTEGER,            // Unique instance server identifier for object
-  #      'cid': ANYTHING            // Unique client session identifier
-  #'record_id': INTEGER             // Unique record identifier, stays same with change
-  #     'name': STRING,             // Name of node
-  #      'doc': STRING,             // String of document
+  #         'id': INTEGER,   // Unique instance server identifier for object
+  #        'cid': ANYTHING,  // Unique client session identifier
+  #  'record_id': INTEGER,   // Unique record identifier, stays same with change
+  # 'created_at': DATETIME   // Date and time object was created
+  #       'name': STRING,    // Name of node
+  #        'doc': STRING,    // String of document
   #    . . .
   #   If type is 'edge':
-  #        'u': INTEGER,            // Refers to 'id' of an existing node
-  #       'cu': ANYTHING            // Refers to 'cid' of an existing node
-  #        'v': INTEGER,            // Refers to 'id' of an existing node
-  #       'cv': ANYTHING,           // Refers to 'cid' of an existing node
+  #         'id': INTEGER,   // NOT IMPLEMENTED, needed for versioning
+  # 'created_at': DATETIME   // NOT IMPLEMENTED, Date and time object was created
+  #          'u': INTEGER,   // Refers to 'id' of an existing node
+  #         'cu': ANYTHING   // Refers to 'cid' of an existing node
+  #          'v': INTEGER,   // Refers to 'id' of an existing node
+  #         'cv': ANYTHING,  // Refers to 'cid' of an existing node
   #   }
   #
   # Currently each id is a NUMBER which is unique for a given project but this
   # is likely to change to an array of NUMBERs that is unique to the entire db.
+  # The current id is the version number so the order of ids represents when
+  # that instance of the object was created.
   #
   # The change operation will return a new id.  The server id represents a
   # specific version of an object.  Will later send record_id relating different
@@ -109,6 +114,7 @@ class ProjectsController < ApplicationController
                                    op: :add,
                                    id: n.version,
                                    record_id: n.record_id,
+                                   created_at: n.created_at,
                                    name: n.name, doc: n.doc } }
         data += @edges.map { |h| { type: :edge,
                                    op: :add }.merge(h) }
@@ -124,9 +130,15 @@ class ProjectsController < ApplicationController
   # individual object or an array of objects.
   # Must format data parameter as a valid JSON string
   # Will return an array of objects in the same format as show
+  # Multiple changes can be grouped in an array (within the main array ) so they
+  # have the same created_at time to group them as single user actions.
   def write
     data = ActiveSupport::JSON.decode(params[:data])
     if data.is_a?(Array)
+      # Group changes by default so they have the smae created_at time
+      if data.flatten.length == data.length and data.length <= 4
+        data = [data]
+      end
     elsif data.is_a?(Hash)
       data = [data]
     else
@@ -135,79 +147,85 @@ class ProjectsController < ApplicationController
     session_objects = {}
     response = []
     @project.context do
-      response = data.map do |hash|
-        keys = %w(type op)
-        type, op = keys.map do |k|
-          v = hash[k]
-          raise "Expected #{k} got #{hash.inspect}" unless v
-          v.downcase
-        end
-
-        unless %w(add remove change).include?(op)
-          raise "Expected op to be add or remove: #{op}"
-        end
-       
-        resp = case type
-        when 'node'
-          fields = {}
-          if %w(add change).include?(op)
-            %w(name doc).each do |k|
-              next unless hash[k]
-              fields[k] = hash[k]
-              keys << k
-            end
-            raise "Expected name or doc" if fields.empty?
+      response = data.map do |list|
+        created_at = Node.dataset.current_datetime
+        [list].flatten.map do |hash|
+          keys = %w(type op)
+          type, op = keys.map do |k|
+            v = hash[k]
+            raise "Expected #{k} got #{hash.inspect}" unless v
+            v.downcase
           end
 
-          if op == 'add'
-            raise "Name required" unless fields['name']
-            node = Node.create(fields)
-            session_objects[hash['cid']] = node if hash['cid']
+          unless %w(add remove change).include?(op)
+            raise "Expected op to be add or remove: #{op}"
+          end
+
+          resp = case type
+          when 'node'
+            fields = { 'created_at' => created_at}
+            if op != 'remove'
+              %w(name doc).each do |k|
+                next unless hash[k]
+                fields[k] = hash[k]
+                keys << k
+              end
+              raise "Expected name or doc" if fields.empty?
+            end
+
+            if op == 'add'
+              raise "Name required" unless fields['name']
+              node = Node.create(fields)
+              session_objects[hash['cid']] = node if hash['cid']
+            else
+              id = hash['id']
+              raise "Expected id" unless id
+              keys << 'id'
+
+              node = Node.where(version: Integer(id)).first
+              if op == 'remove'
+                node.delete(fields)
+              else
+                node = node.create(fields)
+              end
+            end
+            hash.merge(fields).merge('id' => node.version,
+                                     'record_id' => node.record_id,
+                                     'created_at' => node.created_at)
+
+
+          when 'edge'
+            raise "Change not supported on edge" if op == 'change'
+            to, from = %w(u v).map do |k|
+              if value = hash[k]
+                n = Node.where(version: Integer(value)).first
+                raise "Didn't find node #{value}" unless n
+                keys << k
+              elsif cid = hash["c#{k}"]
+                raise "Unexpected session reference on remove" if op == 'remove'
+                n = session_objects[cid]
+                raise "Couldn't find session object" unless n
+                keys << "c#{k}"
+              else
+                raise "Expected value for #{k} or c#{k}"
+              end
+              n
+            end
+
+            from.send("#{op}_to", to, nil, created_at)
+            hash.merge('u' => to.version, 'v' => from.version,
+                       'created_at' => created_at)
           else
-            id = hash['id']
-            raise "Expected id" unless id
-            keys << 'id'
-
-            node = Node.where(version: Integer(id)).first
-            if op == 'remove'
-              node.delete
-            else
-              node = node.create(fields)
-            end
+            raise "Expected type to be Node or Edge"
           end
-          hash.merge('id' => node.version, 'record_id' => node.record_id)
-              .merge(fields)
-          
-        when 'edge'
-          raise "Change not supported on edge" if op == 'change'
-          to, from = %w(u v).map do |k|
-            if value = hash[k]
-              n = Node.where(version: Integer(value)).first
-              raise "Didn't find node #{value}" unless n
-              keys << k
-            elsif cid = hash["c#{k}"]
-              raise "Unexpected session reference on remove" if op == 'remove'
-              n = session_objects[cid]
-              raise "Couldn't find session object" unless n
-              keys << "c#{k}"
-            else
-              raise "Expected value for #{k} or c#{k}"
-            end
-            n
+
+          unless (unexp = (hash.keys - keys)).empty?
+            logger.warn("Unexpected properties #{unexp.join(',')} in #{hash.inspect}")
           end
-          
-          from.send("#{op}_to", to)
-          hash.merge('u' => to.version, 'v' => from.version)
-        else
-          raise "Expected type to be Node or Edge"
-        end
 
-        unless (unexp = (hash.keys - keys)).empty?
-          logger.warn("Unexpected properties #{unexp.join(',')} in #{hash.inspect}")
+          resp
         end
-
-        resp
-      end
+      end.flatten
     end
 
 #    respond_to do |format|

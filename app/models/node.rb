@@ -126,7 +126,8 @@ module Sequel
         )
         many_to_many(name, opts, &block)
 
-        define_method "_add_#{name}" do |node, branch = nil, deleted = nil|
+        # Should break sequel convention and return the edge object
+        define_method "_add_#{name}" do |node, branch = nil, created_at = nil, deleted = nil|
           ctx = current_context(branch, false)
 
           ctx.not_included!(self)
@@ -143,16 +144,16 @@ module Sequel
                    :"#{left_key_prefix}_branch_path" => branch_path,
                    :"#{right_key_prefix}_record_id" => node.record_id,
                    :"#{right_key_prefix}_branch_path" => node.branch_path,
-                   :created_at => self.class.dataset.current_datetime,
+                   :created_at => created_at || self.class.dataset.current_datetime,
                    :deleted => deleted ? true : false)
 
           db[join_table].insert(h)
           #Edge.dataset.insert(h)
         end
 
-        define_method "_remove_#{name}" do |node, branch = nil|
+        define_method "_remove_#{name}" do |node, branch = nil, created_at = nil|
           # !!! Must check if the object actually exists
-          send("_add_#{name}", node, branch, true)
+          send("_add_#{name}", node, branch, created_at, true)
         end
 
         # _remove_ and _remove_all_

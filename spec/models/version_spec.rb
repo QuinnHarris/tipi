@@ -29,7 +29,7 @@ describe Branch do
     expect(node_a.branch).to eq(branch)
 
     expect(Node.dataset(branch).all).to eq([node_a])
-    node_a_delete = node_a.delete(branch)
+    node_a_delete = node_a.delete(branch: branch)
     expect(node_a_delete).to be_an_instance_of(Node)
     expect(node_a_delete.version).to be > node_a.version
     expect(Node.dataset(branch).all).to eq([])

@@ -35,7 +35,7 @@ describe ProjectsController do
 
       node_data = resp_data.first
       expect(node_data[:id]).to be      
-      expect(node_data).to eq(node_data.slice(:id, :record_id).merge(node_attr))
+      expect(node_data.except(:id, :record_id, :created_at)).to eq(node_attr)
 
       node_data
     end
@@ -47,8 +47,9 @@ describe ProjectsController do
     resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
 
-    data << (edge_data = resp_data.first.symbolize_keys)
-    expect(edge_data).to eq(edge_attr)
+    # !!! except should be removed when implemented
+    data << (edge_data = resp_data.first.symbolize_keys.except(:created_at))
+    expect(edge_data.except(:created_at)).to eq(edge_attr)
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
@@ -59,7 +60,8 @@ describe ProjectsController do
     edge_attr.merge!(op: 'remove')
     resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
-    expect(resp_data.first).to eq(edge_attr)
+    # !!! except should be removed when implemented
+    expect(resp_data.first.except(:created_at)).to eq(edge_attr)
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
@@ -84,18 +86,22 @@ describe ProjectsController do
     resp_data = write_request(project.version, request)
     expect(resp_data).to have(2).items
 
-    node_3_id = resp_data.first[:id]
+    node_3_data = resp_data.first
     expect(resp_data.first[:id]).to be
     expect(resp_data.first).to include(node_attr)
 
     expect(resp_data.last[:v]).to eq(resp_data.first[:id])
     expect(resp_data.last).to include(edge_attr)
 
+    expect(resp_data.first[:created_at]).to eq(resp_data.last[:created_at])
+
     # Change a node
-    node_attr = attributes_for(:node_ajax, op: 'change', id: node_3_id)
+    node_attr = attributes_for(:node_ajax, op: 'change', id: node_3_data[:id])
     resp_data = write_request(project.version, node_attr)
     expect(resp_data).to have(1).items
-    expect(resp_data.first[:id]).to be > node_attr[:id]
-    expect(resp_data.first).to eq(node_attr.merge(resp_data.first.slice(:id, :record_id)))
+    node_data = resp_data.first
+    expect(node_data[:id]).to be > node_attr[:id]
+    expect(node_data.except(:id, :created_at))
+      .to eq(node_attr.except(:id).merge(node_3_data.slice(:record_id)))
   end
 end
