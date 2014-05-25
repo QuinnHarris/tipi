@@ -57,6 +57,41 @@ class ProjectsController < ApplicationController
     redirect_to categories_url, notice: 'Project was successfully deleted'
   end
 
+  # GET request at /projects/NUMBER/search{.json}?q=QUERY
+  # accepts q parameter for search string and local if it should only search the
+  # current project
+  # For HTML response returns an UL (unordered list) with LI for each result
+  # For JSON response returns just like show without type or op
+  def search
+    if params[:local]
+      ds = Node.dataset(@project.context)
+    else
+      ds = Node.dataset.latest_versions
+    end
+
+    @results =
+        ds.clone(:from => ds.opts[:from] +
+                      [Sequel.lit(["plainto_tsquery(",
+                                   '::regconfig, ', ') query'],
+                                  'english', params[:q])])
+        .where(Sequel.lit('tsv @@ query'))
+        .select_append(Sequel.lit('ts_rank_cd(tsv, query)'))
+        .limit(10)
+        .all
+
+    if @results.empty?
+      # No results just use substring matching
+      @results =
+          ds.where(Sequel.like(:name, /#{params[:q]}/))
+          .limit(10)
+          .all
+    end
+
+    respond_to do |format|
+      format.html { render partial: 'search', collection: @results }
+      format.json { render :json => @results.map { |n| n.client_values } }
+    end
+  end
 
   # GET request at /projects/NUMBER.json (calls show below)
   #   returns an array of objects each with the following format.
@@ -110,12 +145,8 @@ class ProjectsController < ApplicationController
         end
         
         data = []
-        data += @nodes.map { |n| { type: :node,
-                                   op: :add,
-                                   id: n.version,
-                                   record_id: n.record_id,
-                                   created_at: n.created_at,
-                                   name: n.name, doc: n.doc } }
+        data += @nodes.map { |n| n.client_values.merge(type: :node,
+                                                       op: :add) }
         data += @edges.map { |h| { type: :edge,
                                    op: :add }.merge(h) }
         

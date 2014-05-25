@@ -106,61 +106,90 @@ Sequel.migration do
     # This will not detect cycles when two transactions are opened
     # simultaneously that together insert rows causing a cycle
     run %(
-CREATE FUNCTION cycle_test() RETURNS TRIGGER AS $cycle_test$
-DECLARE
-  cycle_path integer ARRAY;
-BEGIN
-  IF (TG_OP = 'UPDATE' AND
-      NEW.successor_id = OLD.successor_id AND
-      NEW.predecessor_id = OLD.predecessor_id) THEN
-    RETURN NULL;
-  END IF;
+      CREATE FUNCTION cycle_test() RETURNS TRIGGER AS $$
+      DECLARE
+        cycle_path integer ARRAY;
+      BEGIN
+        IF (TG_OP = 'UPDATE' AND
+            NEW.successor_id = OLD.successor_id AND
+            NEW.predecessor_id = OLD.predecessor_id) THEN
+          RETURN NULL;
+        END IF;
 
-  WITH RECURSIVE branch_decend AS (
-      SELECT NEW.successor_id AS id,
-             ARRAY[NEW.predecessor_id, NEW.successor_id] AS path,
-             false AS cycle
-    UNION
-      SELECT branch_relations.successor_id,
-             branch_decend.path || branch_relations.successor_id,
-	     branch_relations.successor_id = ANY(branch_decend.path)
-        FROM branch_relations
-	  INNER JOIN branch_decend
-	    ON branch_relations.predecessor_id = branch_decend.id
-        WHERE NOT branch_decend.cycle
-  ) SELECT path INTO cycle_path
-      FROM branch_decend WHERE cycle LIMIT 1;
-  
-  IF FOUND THEN
-    RAISE EXCEPTION 'cycle found %', cycle_path;
-  END IF;
+        WITH RECURSIVE branch_decend AS (
+            SELECT NEW.successor_id AS id,
+                   ARRAY[NEW.predecessor_id, NEW.successor_id] AS path,
+                   false AS cycle
+          UNION
+            SELECT branch_relations.successor_id,
+                   branch_decend.path || branch_relations.successor_id,
+             branch_relations.successor_id = ANY(branch_decend.path)
+              FROM branch_relations
+          INNER JOIN branch_decend
+            ON branch_relations.predecessor_id = branch_decend.id
+              WHERE NOT branch_decend.cycle
+        ) SELECT path INTO cycle_path
+            FROM branch_decend WHERE cycle LIMIT 1;
 
-  RETURN NULL;
-END;
-$cycle_test$ LANGUAGE plpgsql;
+        IF FOUND THEN
+          RAISE EXCEPTION 'cycle found %', cycle_path;
+        END IF;
 
-CREATE CONSTRAINT TRIGGER cycle_test
-  AFTER INSERT OR UPDATE ON branch_relations
-  FOR EACH ROW EXECUTE PROCEDURE cycle_test();
-)
+        RETURN NULL;
+      END
+      $$ LANGUAGE plpgsql;
+
+      CREATE CONSTRAINT TRIGGER cycle_test
+        AFTER INSERT OR UPDATE ON branch_relations
+        FOR EACH ROW EXECUTE PROCEDURE cycle_test();
+    )
 
     create_version_table :nodes do
       String        :type, null: false
-      
+
       String        :name, null: false
       String        :doc,  text: true
-      String        :data, text: true
+      column        :tsv, 'tsvector'
+      index         :tsv, :index_type => :gin
+      #full_text_index [:name, :doc], :language => 'english'
     end
+    # Update tsv on INSERT, but not UPDATE
+    run %(
+      CREATE FUNCTION nodes_trigger() RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.tsv :=
+          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') ||
+          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
+        RETURN NEW;
+      END
+      $$ LANGUAGE plpgsql;
+
+      CREATE TRIGGER nodes_tsvector_update
+        BEFORE INSERT ON nodes
+        FOR EACH ROW EXECUTE PROCEDURE nodes_trigger();
+    )
 
     create_many_to_many_version_table(:edges)
 
     create_many_to_many_version_table(:edge_inters, inter_branch: true)
 
+
+    create_version_table :resources do
+      String        :type, null: false
+
+      String        :name, null: false
+    end
+
+    create_many_to_many_version_table(:resource_edges) do
+      String        :type, null: false
+      String        :data
+    end
+
     create_table :instances do
       primary_key :id
-      foreign_key :node_version, :nodes
-      column      :node_branch_path, 'integer[]', null: false, default: '{}'
-      index       [:node_version, :node_branch_path]
+      foreign_key :resource_version, :resources
+      column      :resource_branch_path, 'integer[]', null: false, default: '{}'
+      index       [:resource_version, :resource_branch_path]
 
       String      :state
       Integer     :count, null: false, default: 1

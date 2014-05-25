@@ -178,6 +178,14 @@ class Node < Sequel::Model
                      reciprocal: opposite, inter_branch: inter_branch
   end
   end
+
+  def client_values
+    {        id: version,
+      record_id: record_id,
+     created_at: created_at,
+           name: name,
+            doc: doc }
+  end
 end
 
 class Project < Node
