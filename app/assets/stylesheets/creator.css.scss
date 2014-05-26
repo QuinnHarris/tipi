@@ -101,12 +101,13 @@ label {
   margin:auto;
 }
 #doc-container{
-  flex-grow: 2;
+  flex-grow: 1;
+  flex-shrink: 1;
   height: 100%;
-  background: tomato;
 }
 #nodes-container {
-  flex-grow: 5;
+  flex-grow: 3;
+  flex-shrink: 3;
   height: 100%;
   background-color: thistle;
 }

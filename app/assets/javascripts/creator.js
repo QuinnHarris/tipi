@@ -4,8 +4,16 @@
 
 function edit(){
 	$(function(){
-		$('#doc').editable({inlineMode: false});
+		$('#doc-container').editable({
+			autosave: true,
+			inlineMode: false,
+			minHeight: '90%',
+			afterSaveCallback: function (data){
+				console.log(data);
+			},
+			});
 	})
+	
 }
 
 // diagram showing cost in money and time
@@ -39,7 +47,7 @@ function initSvg(){
 	backdrop = svg.append("rect")
 		.attr("width", '100%')
 		.attr("height", '100%')
-		.attr("fill", 'aliceblue')
+		.attr("fill", 'thistle')
 		.attr('class', 'backdrop')
 		.on('mousemove', mousemove);
 	return svg;
