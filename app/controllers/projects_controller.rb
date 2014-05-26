@@ -57,73 +57,39 @@ class ProjectsController < ApplicationController
     redirect_to categories_url, notice: 'Project was successfully deleted'
   end
 
-  # JSON call to create a new node
-  # PUT call with name paramater
-  # returns id and name
-  # creator_project_node_new_path(project, format: :json)
-  def node_new
-    @project.context do
-      @node = @project.add_to(Node.create(name: params[:name]))
+  # GET request at /projects/NUMBER/search{.json}?q=QUERY
+  # accepts q parameter for search string and local if it should only search the
+  # current project
+  # For HTML response returns an UL (unordered list) with LI for each result
+  # For JSON response returns just like show without type or op
+  def search
+    if params[:local]
+      ds = Node.dataset(@project.context)
+    else
+      ds = Node.dataset.latest_versions
     end
-    respond_to do |format|
-      format.json { render :json => { id: @node.version, name: @node.name } }
+
+    @results =
+        ds.clone(:from => ds.opts[:from] +
+                      [Sequel.lit(["plainto_tsquery(",
+                                   '::regconfig, ', ') query'],
+                                  'english', params[:q])])
+        .where(Sequel.lit('tsv @@ query'))
+        .select_append(Sequel.lit('ts_rank_cd(tsv, query)'))
+        .limit(10)
+        .all
+
+    if @results.empty?
+      # No results just use substring matching
+      @results =
+          ds.where(Sequel.like(:name, /#{params[:q]}/))
+          .limit(10)
+          .all
     end
-  end
-
-  # JSON call to add and remove edges
-  # PUT call with to and from and op paramater
-  # creator_project_edge_change_path(project, format: :json)
-  def edge_change
-    @project.context do
-      @to, @from = [:to, :from].map do |k|
-        Node.where(version: Integer(params[k])).first
-      end
-      case params[:op]
-        when 'add'
-        @from.add_to(@to)
-        # Remove from project, possibly full remove from db
-        #if from.from.include?(@project)
-
-        when 'remove'
-        # Add to project if abandoned
-        @from.remove_to(@to)
-      else
-        raise "must specify action"
-      end
-    end
-    respond_to do |format|
-      format.json { render :json => { to: @to.version, from: @from.version } }
-    end
-  end
-
-  # or should we use a single json input interface to modify nodes?
-  
-  # creator_project_nodes_path(project, format: :json) 
-  def get_data
-    @edges = []
-
-    @project.context do
-      @nodes = Node.exclude(:type => 'Project').all
-
-      @nodes.each do |n|
-        n.to.each do |to|
-          @edges << { v: n.version, u: to.version }
-        end
-      end
-    end
-  end
-
-  def nodes
-    get_data
-      
-    data = {
-      nodes: @nodes.map { |n| { value: {cid: n.version, name:  n.name } } },
-      edges: @edges
-    }
 
     respond_to do |format|
-      format.xml  { render  :xml => data }
-      format.json { render :json => data }
+      format.html { render partial: 'search', collection: @results }
+      format.json { render :json => @results.map { |n| n.client_values } }
     end
   end
 
@@ -131,22 +97,33 @@ class ProjectsController < ApplicationController
   #   returns an array of objects each with the following format.
   # Message Format:
   #   { 'type': 'node' or 'edge',   // Type of object
-  #       'op': 'add' or 'remove',  // Operation on object
+  #       'op': 'add', 'change' or 'remove',  // Operation on object
   #    . . .
   #   If type is 'node':
-  #       'id': NUMBER,             // Unique server identifier for object
-  #      'cid': ANYTHING            // Unique client session identifier
-  #     'name': STRING,             // Name of node
+  #         'id': INTEGER,   // Unique instance server identifier for object
+  #        'cid': ANYTHING,  // Unique client session identifier
+  #  'record_id': INTEGER,   // Unique record identifier, stays same with change
+  # 'created_at': DATETIME   // Date and time object was created
+  #       'name': STRING,    // Name of node
+  #        'doc': STRING,    // String of document
   #    . . .
   #   If type is 'edge':
-  #        'u': NUMBER,             // Refers to 'id' of an existing node
-  #       'cu': ANYTHING            // Refers to 'cid' of an existing node
-  #        'v': NUMBER,             // Refers to 'id' of an existing node
-  #       'cv': ANYTHING,           // Refers to 'cid' of an existing node
+  #         'id': INTEGER,   // NOT IMPLEMENTED, needed for versioning
+  # 'created_at': DATETIME   // NOT IMPLEMENTED, Date and time object was created
+  #          'u': INTEGER,   // Refers to 'id' of an existing node
+  #         'cu': ANYTHING   // Refers to 'cid' of an existing node
+  #          'v': INTEGER,   // Refers to 'id' of an existing node
+  #         'cv': ANYTHING,  // Refers to 'cid' of an existing node
   #   }
   #
   # Currently each id is a NUMBER which is unique for a given project but this
   # is likely to change to an array of NUMBERs that is unique to the entire db.
+  # The current id is the version number so the order of ids represents when
+  # that instance of the object was created.
+  #
+  # The change operation will return a new id.  The server id represents a
+  # specific version of an object.  Will later send record_id relating different
+  # versions of an object together.
   #
   # The URL should be determined from the 'data-path' attribute of the
   # div#nodes-container.  For show append a .json to that path or requesting
@@ -155,13 +132,21 @@ class ProjectsController < ApplicationController
     respond_to do |format|
       format.html {  }
       format.json do
-        get_data
+        @edges = []
+
+        @project.context do
+          @nodes = Node.exclude(:type => 'Project').all
+
+          @nodes.each do |n|
+            n.to.each do |to|
+              @edges << { v: n.version, u: to.version }
+            end
+          end
+        end
         
         data = []
-        data += @nodes.map { |n| { type: :node,
-                                   op: :add,
-                                   id: n.version,
-                                   name: n.name } }
+        data += @nodes.map { |n| n.client_values.merge(type: :node,
+                                                       op: :add) }
         data += @edges.map { |h| { type: :edge,
                                    op: :add }.merge(h) }
         
@@ -176,9 +161,15 @@ class ProjectsController < ApplicationController
   # individual object or an array of objects.
   # Must format data parameter as a valid JSON string
   # Will return an array of objects in the same format as show
+  # Multiple changes can be grouped in an array (within the main array ) so they
+  # have the same created_at time to group them as single user actions.
   def write
     data = ActiveSupport::JSON.decode(params[:data])
     if data.is_a?(Array)
+      # Group changes by default so they have the smae created_at time
+      if data.flatten.length == data.length and data.length <= 4
+        data = [data]
+      end
     elsif data.is_a?(Hash)
       data = [data]
     else
@@ -187,66 +178,85 @@ class ProjectsController < ApplicationController
     session_objects = {}
     response = []
     @project.context do
-      response = data.map do |hash|
-        keys = %w(type op)
-        type, op = keys.map do |k|
-          v = hash[k]
-          raise "Expected #{k} got #{hash.inspect}" unless v
-          v.downcase
-        end
-
-        unless %w(add remove).include?(op)
-          raise "Expected op to be add or remove: #{op}"
-        end
-        
-        resp = case type
-        when 'node'
-          if op == 'add'
-            name = hash['name']
-            raise "Expected name" unless name
-            keys << 'name'
-
-            node = Node.create(name: name)
-            session_objects[hash['cid']] = node if hash['cid']
-          else # remove
-            id = hash['id']
-            raise "Expected id" unless id
-            keys << 'id'
-
-            node = Node.where(version: Integer(id)).first
-            node.delete
+      response = data.map do |list|
+        created_at = Node.dataset.current_datetime
+        [list].flatten.map do |hash|
+          keys = %w(type op)
+          type, op = keys.map do |k|
+            v = hash[k]
+            raise "Expected #{k} got #{hash.inspect}" unless v
+            v.downcase
           end
-          hash.merge('id' => node.version, 'name' => node.name)
-          
-        when 'edge'
-          to, from = %w(u v).map do |k|
-            if value = hash[k]
-              n = Node.where(version: Integer(value)).first
-              raise "Didn't find node #{value}" unless n
-              keys << k
-            elsif cid = hash["c#{k}"]
-              raise "Unexpected session reference on remove" if op == 'remove'
-              n = session_objects[cid]
-              raise "Couldn't find session object" unless n
-              keys << "c#{k}"
-            else
-              raise "Expected value for #{k} or c#{k}"
+
+          unless %w(add remove change).include?(op)
+            raise "Expected op to be add or remove: #{op}"
+          end
+
+          resp = case type
+          when 'node'
+            fields = { 'created_at' => created_at}
+            if op != 'remove'
+              %w(name doc).each do |k|
+                next unless hash[k]
+                fields[k] = hash[k]
+                keys << k
+              end
+              raise "Expected name or doc" if fields.empty?
             end
-            n
+
+            if op == 'add'
+              raise "Name required" unless fields['name']
+              node = Node.create(fields)
+              session_objects[hash['cid']] = node if hash['cid']
+            else
+              id = hash['id']
+              raise "Expected id" unless id
+              keys << 'id'
+
+              node = Node.where(version: Integer(id)).first
+              if op == 'remove'
+                node.delete(fields)
+              else
+                node = node.create(fields)
+              end
+            end
+            hash.merge(fields).merge('id' => node.version,
+                                     'record_id' => node.record_id,
+                                     'created_at' => node.created_at)
+
+
+          when 'edge'
+            raise "Change not supported on edge" if op == 'change'
+            to, from = %w(u v).map do |k|
+              if value = hash[k]
+                n = Node.where(version: Integer(value)).first
+                raise "Didn't find node #{value}" unless n
+                keys << k
+              elsif cid = hash["c#{k}"]
+                raise "Unexpected session reference on remove" if op == 'remove'
+                n = session_objects[cid]
+                raise "Couldn't find session object" unless n
+                keys << "c#{k}"
+              else
+                raise "Expected value for #{k} or c#{k}"
+              end
+              n
+            end
+
+            from.send("#{op}_to", to, nil, created_at)
+            hash.merge('u' => to.version, 'v' => from.version,
+                       'created_at' => created_at)
+          else
+            raise "Expected type to be Node or Edge"
           end
-          
-          from.send("#{op}_to", to)
-          hash.merge('u' => to.version, 'v' => from.version)
-        else
-          raise "Expected type to be Node or Edge"
-        end
 
-        unless (unexp = (hash.keys - keys)).empty?
-          logger.warn("Unexpected properties #{unexp.join(',')} in #{hash.inspect}")
-        end
+          unless (unexp = (hash.keys - keys)).empty?
+            logger.warn("Unexpected properties #{unexp.join(',')} in #{hash.inspect}")
+          end
 
-        resp
-      end
+          resp
+        end
+      end.flatten
     end
 
 #    respond_to do |format|

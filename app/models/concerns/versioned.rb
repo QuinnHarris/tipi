@@ -46,11 +46,24 @@ module DatasetBranchContext
       exp = Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
       if options[:context_column]
-        exp &= Sequel.expr(:context_id => :in_context) |
-            Sequel.expr(:context_id => options[:context_columm])
+        exp &= (Sequel.expr(:context_id => nil) & :in_context) |
+            Sequel.expr(:context_id => options[:context_column])
       end
       exp
     end
+  end
+
+  def latest_versions(partition = nil, include_deleted = false)
+    ds = select_append(Sequel.function(:rank)
+                       .over(:partition => [:record_id, partition].compact,
+                             :order => [partition && :depth,
+                                        Sequel.qualify(model.table_name,
+                                                       :version).desc
+                                       ].compact ) )
+         .from_self
+         .filter(:rank => 1)
+    ds = ds.filter(:deleted => false) unless include_deleted
+    ds
   end
 
   protected
@@ -110,14 +123,8 @@ module Versioned
         
         next ds if options[:versions]
 
-        ds = ds.select_append(Sequel.function(:rank)
-                                .over(:partition => [:record_id, branch_path_select],
-                                      :order => [:depth, Sequel.qualify(table_name, :version).desc] ) )
-        
-        # Use original dataset if single table inheritance is used
-        ds = (@sti_dataset || raw_dataset).from(ds).filter(:rank => 1)
-        ds = ds.filter(:deleted => false) unless options[:deleted]
-        ds.select(*columns)
+        ds.latest_versions(branch_path_select, options[:deleted])
+          .select(*columns)
       end
     end
     public
@@ -169,6 +176,7 @@ module Versioned
 
       @context = BranchContext.get(check_context_specifier(values), false)
 
+      values = values.dup
       values.delete(:context)
       values[:branch] = @context.branch_nil
       values[:branch_id] = @context.id
@@ -217,9 +225,9 @@ module Versioned
 
     # Should delete just be a row tag or an whole new table as this wastes alot of space
     # This approach simplifies and probably speeds up queries though
-    def delete(branch = nil)
+    def delete(values = {})
       # !!! Shouldn't be able to delete already deleted object
-      create(deleted: true, branch: branch)
+      create(values.merge(deleted: true))
     end
 
     # Check branch assignments are valid

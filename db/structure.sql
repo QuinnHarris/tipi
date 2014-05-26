@@ -32,37 +32,53 @@ SET search_path = public, pg_catalog;
 CREATE FUNCTION cycle_test() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-DECLARE
-  cycle_path integer ARRAY;
-BEGIN
-  IF (TG_OP = 'UPDATE' AND
-      NEW.successor_id = OLD.successor_id AND
-      NEW.predecessor_id = OLD.predecessor_id) THEN
-    RETURN NULL;
-  END IF;
+      DECLARE
+        cycle_path integer ARRAY;
+      BEGIN
+        IF (TG_OP = 'UPDATE' AND
+            NEW.successor_id = OLD.successor_id AND
+            NEW.predecessor_id = OLD.predecessor_id) THEN
+          RETURN NULL;
+        END IF;
 
-  WITH RECURSIVE branch_decend AS (
-      SELECT NEW.successor_id AS id,
-             ARRAY[NEW.predecessor_id, NEW.successor_id] AS path,
-             false AS cycle
-    UNION
-      SELECT branch_relations.successor_id,
-             branch_decend.path || branch_relations.successor_id,
-	     branch_relations.successor_id = ANY(branch_decend.path)
-        FROM branch_relations
-	  INNER JOIN branch_decend
-	    ON branch_relations.predecessor_id = branch_decend.id
-        WHERE NOT branch_decend.cycle
-  ) SELECT path INTO cycle_path
-      FROM branch_decend WHERE cycle LIMIT 1;
-  
-  IF FOUND THEN
-    RAISE EXCEPTION 'cycle found %', cycle_path;
-  END IF;
+        WITH RECURSIVE branch_decend AS (
+            SELECT NEW.successor_id AS id,
+                   ARRAY[NEW.predecessor_id, NEW.successor_id] AS path,
+                   false AS cycle
+          UNION
+            SELECT branch_relations.successor_id,
+                   branch_decend.path || branch_relations.successor_id,
+             branch_relations.successor_id = ANY(branch_decend.path)
+              FROM branch_relations
+          INNER JOIN branch_decend
+            ON branch_relations.predecessor_id = branch_decend.id
+              WHERE NOT branch_decend.cycle
+        ) SELECT path INTO cycle_path
+            FROM branch_decend WHERE cycle LIMIT 1;
 
-  RETURN NULL;
-END;
-$$;
+        IF FOUND THEN
+          RAISE EXCEPTION 'cycle found %', cycle_path;
+        END IF;
+
+        RETURN NULL;
+      END
+      $$;
+
+
+--
+-- Name: nodes_trigger(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION nodes_trigger() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+      BEGIN
+        NEW.tsv :=
+          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') ||
+          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
+        RETURN NEW;
+      END
+      $$;
 
 
 SET default_tablespace = '';
@@ -231,7 +247,8 @@ CREATE TABLE nodes (
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
     name text NOT NULL,
-    data text,
+    doc text,
+    tsv tsvector,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -368,27 +385,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edge_inters_from_record_id_from_branch_path_from_branch_id__key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY edge_inters
-    ADD CONSTRAINT edge_inters_from_record_id_from_branch_path_from_branch_id__key UNIQUE (from_record_id, from_branch_path, from_branch_id, to_record_id, to_branch_path, to_branch_id, deleted);
-
-
---
 -- Name: edge_inters_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY edge_inters
     ADD CONSTRAINT edge_inters_pkey PRIMARY KEY (version);
-
-
---
--- Name: edges_from_record_id_from_branch_path_to_record_id_to_branc_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_from_record_id_from_branch_path_to_record_id_to_branc_key UNIQUE (from_record_id, from_branch_path, to_record_id, to_branch_path, deleted);
 
 
 --
@@ -482,6 +483,13 @@ CREATE INDEX nodes_record_id_index ON nodes USING btree (record_id);
 
 
 --
+-- Name: nodes_tsv_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX nodes_tsv_index ON nodes USING btree (tsv);
+
+
+--
 -- Name: users_confirmation_token_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -514,6 +522,13 @@ CREATE UNIQUE INDEX users_unlock_token_index ON users USING btree (unlock_token)
 --
 
 CREATE CONSTRAINT TRIGGER cycle_test AFTER INSERT OR UPDATE ON branch_relations NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE PROCEDURE cycle_test();
+
+
+--
+-- Name: nodes_tsvector_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER nodes_tsvector_update BEFORE INSERT ON nodes FOR EACH ROW EXECUTE PROCEDURE nodes_trigger();
 
 
 --
