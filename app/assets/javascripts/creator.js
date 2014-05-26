@@ -2,6 +2,12 @@
 	on zoom the html shrinks more than the svg
 */
 
+function edit(){
+	$(function(){
+		$('#doc').editable({inlineMode: false});
+	})
+}
+
 // diagram showing cost in money and time
 // incremental display arrow keys
 // node bank
@@ -93,7 +99,7 @@ $(document).ready(function(){
 	});
 	initSvg();
 	backdrop;
-	
+	edit();
 });
 
 inter = {
@@ -386,5 +392,9 @@ menuData = {
 		{
 			"text": "Delete this node",
 			"action": 'delNode'
-		}
+		},
+		{
+			'text': "Create project from this node",
+			"action": null
+		}	
 ]};

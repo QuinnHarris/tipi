@@ -70,4 +70,4 @@ gem 'sequel-devise'
 
 gem 'tzinfo-data', platforms: [:mingw, :mswin]
 gem 'wysiwyg-rails'
-
+gem 'font-awesome-rails'

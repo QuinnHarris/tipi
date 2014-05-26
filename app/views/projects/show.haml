@@ -2,4 +2,7 @@
   %button#add-node.button= "Add a node"
   %button#load-project.button= "Load a project"
   %button#toggle-direction.button= "Toggle graph orientation"
-#nodes-container{ 'data-path' => project_path(@project) }
+#app-container
+  #doc-container
+    #doc
+  #nodes-container{ 'data-path' => project_path(@project) }

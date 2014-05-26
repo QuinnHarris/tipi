@@ -48,19 +48,6 @@ label {
   color: red;
 }
 
-#nodes-container {
-  width: 90%;
-  height: 30em;
-  border-size: border-box;
-  border: 1px solid black;
-  margin: 1em auto;
-  background-color: aliceblue;
-  
-  .backdrop{
-    
-  }
-}
-
 .node-outer{
   width:auto;
   background: linear-gradient(135deg, rgba(255,235,232,1) 0%, rgba(255,235,232,1) 9%, rgba(154,156,171,1) 39%, rgba(94,165,191,1) 69%, rgba(117,97,87,1) 100%);
@@ -106,3 +93,21 @@ label {
   background: lightblue;
   list-style-type: none;
 }
+#app-container{
+  width: 90%;
+  height: 30em;
+  display: flex;
+  justify-content: center;
+  margin:auto;
+}
+#doc-container{
+  flex-grow: 2;
+  height: 100%;
+  background: tomato;
+}
+#nodes-container {
+  flex-grow: 5;
+  height: 100%;
+  background-color: thistle;
+}
+
