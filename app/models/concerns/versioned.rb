@@ -8,6 +8,7 @@ module DatasetBranchContext
   def setup_object(o)
     return o if o.frozen?
     o.send('context=', context) if context and o.respond_to?(:context)
+    o.send('branch_path_context=', o.values.delete(:branch_path_context) || [])
     o.freeze
     o
   end
@@ -108,15 +109,25 @@ module Versioned
     end
     public
 
+
     def branch_path_record
-      self[:branch_path] || Sequel.pg_array([])
+      self[:branch_path]
     end
-    def branch_path_context
-      self[:branch_path_context] || Sequel.pg_array([])
-    end
+    attr_reader :branch_path_context
     def branch_path
-      branch_path_record  #+ branch_path_context)
+      Sequel.pg_array(branch_path_context + branch_path_record, 'integer')
     end
+    private
+    attr_writer :branch_path_context
+    public
+
+    # Change equals to handle computed branch_path
+    def eql?(obj)
+      (obj.class == model) &&
+          (obj.values.except(:branch_path) == @values.except(:branch_path)) &&
+          (obj.branch_path == branch_path)
+    end
+
 
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
@@ -124,17 +135,19 @@ module Versioned
     def self.dataset_from_context(context, options = {})
       context.dataset do |branch_context_dataset|
         ds = raw_dataset.join_branch(branch_context_dataset)
-        
-        branch_path_select = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
-          .pg_array.concat(Sequel.qualify(table_name, :branch_path) )
-        
+
+        branch_path_context = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
+        branch_path_record = Sequel.qualify(table_name, :branch_path)
+
         ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
-                       branch_path_select.as(:branch_path))
+                       branch_path_record,
+                       branch_path_context.as(:branch_path_context) )
         
         next ds if options[:versions]
 
-        ds.latest_versions(branch_path_select, options[:deleted])
-          .select(*columns)
+        ds.latest_versions(branch_path_context.pg_array.concat(branch_path_record),
+                           options[:deleted])
+          .select(*columns, :branch_path_context)
       end
     end
     public
@@ -186,6 +199,8 @@ module Versioned
 
       @context = BranchContext.get(check_context_specifier(values), false)
 
+      @branch_path_context = []
+
       values = values.dup
       values.delete(:context)
       values[:branch] = @context.branch_nil
@@ -211,7 +226,7 @@ module Versioned
       ctx.not_included_or_duplicated!(context, false)
       # We assume context includes branch_id
 
-      vals[:branch_path] = ctx.path_from(context) + vals[:branch_path]
+      vals[:branch_path] = ctx.path_from(context) + branch_path
 
       # !!! Apply cached branch if availible
       o = self.class.new(vals, &block)
