@@ -108,6 +108,16 @@ module Versioned
     end
     public
 
+    def branch_path_record
+      self[:branch_path] || Sequel.pg_array([])
+    end
+    def branch_path_context
+      self[:branch_path_context] || Sequel.pg_array([])
+    end
+    def branch_path
+      branch_path_record  #+ branch_path_context)
+    end
+
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private

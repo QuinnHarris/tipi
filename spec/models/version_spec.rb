@@ -123,7 +123,7 @@ describe Branch do
     br_a = Branch.create(name: 'Branch A') do
       node_a = Node.create(name: 'Node A')
       node_b = Node.create(name: 'Node B')
-      expect(node_a.add_to(node_b)).to eq(node_b)
+      expect(node_a.add_to(node_b)).to be_an_instance_of(Edge)
 
       expect(node_a.to).to eq([node_b])
       expect(node_a.from).to eq([])
@@ -140,7 +140,7 @@ describe Branch do
 
     br_b = br_a.fork(name: 'Branch B') do
       node_c = Node.create(name: 'Node C')
-      expect(node_c.add_from(node_a)).to eq(node_a)
+      expect(node_c.add_from(node_a)).to be_an_instance_of(Edge)
 
       expect(node_a.to).to match_array([node_b, node_c])
 
