@@ -192,10 +192,14 @@ class BranchContext
   # Called after not_included_or_duplicated!
   def path_from(ctx)
     sub_id, sub_version = id_version(ctx)
+
+    return [] if sub_id == id
     
     path = []
     while sub_id
-      suc = data.find { |h| h[:branch_id] == sub_id }[:successor_id]
+      elem = data.find { |h| h[:branch_id] == sub_id }
+      return nil unless elem
+      suc = elem[:successor_id]
       path << sub_id if data.find_all { |h| h[:successor_id] == suc }.length > 1
       sub_id = suc
     end

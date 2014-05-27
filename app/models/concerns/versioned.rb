@@ -101,31 +101,38 @@ module Versioned
     attr_writer :context
     attr_writer :previous
 
-    def current_context(branch = nil, version = nil)
-      BranchContext.get(branch || BranchContext.current! || context, version)
+    def current_context(ctx = nil, version = nil)
+      BranchContext.get(ctx || BranchContext.current! || context, version)
     end
-    def current_context!(branch = nil)
-      current_context(branch, false)
+    def current_context!(ctx = nil)
+      current_context(ctx, false)
     end
     public
 
 
+    def branch_path(ctx = nil)
+      Sequel.pg_array(branch_path_context(ctx) + branch_path_record, 'integer')
+    end
     def branch_path_record
       self[:branch_path]
     end
-    attr_reader :branch_path_context
-    def branch_path
-      Sequel.pg_array(branch_path_context + branch_path_record, 'integer')
+    def branch_path_context(ctx = nil)
+      (current_context(ctx).path_from(context) || []) + @branch_path_context
     end
     private
-    attr_writer :branch_path_context
+    def branch_path_context=(val)
+      @branch_path_context = Sequel.pg_array(val, 'integer')
+    end
     public
+
+    def set_context!(ctx)
+      @branch_path_context = branch_path_context(ctx)
+      @context = current_context(ctx)
+    end
 
     # Change equals to handle computed branch_path
     def eql?(obj)
-      (obj.class == model) &&
-          (obj.values.except(:branch_path) == @values.except(:branch_path)) &&
-          (obj.branch_path == branch_path)
+      super(obj) && (obj.branch_path_context == branch_path_context)
     end
 
 
@@ -136,16 +143,16 @@ module Versioned
       context.dataset do |branch_context_dataset|
         ds = raw_dataset.join_branch(branch_context_dataset)
 
-        branch_path_context = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
+        branch_path_ctx = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
         branch_path_record = Sequel.qualify(table_name, :branch_path)
 
         ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
                        branch_path_record,
-                       branch_path_context.as(:branch_path_context) )
+                       branch_path_ctx.as(:branch_path_context) )
         
         next ds if options[:versions]
 
-        ds.latest_versions(branch_path_context.pg_array.concat(branch_path_record),
+        ds.latest_versions(branch_path_ctx.pg_array.concat(branch_path_record),
                            options[:deleted])
           .select(*columns, :branch_path_context)
       end
@@ -159,7 +166,7 @@ module Versioned
       return super() if @in_dataset or (!BranchContext.current! and !branch)
       @in_dataset = true
       context = BranchContext.get(branch)
-      ds = dataset_from_context(context, options = {})
+      ds = dataset_from_context(context, options)
       @in_dataset = nil
       ds
     end
@@ -226,7 +233,7 @@ module Versioned
       ctx.not_included_or_duplicated!(context, false)
       # We assume context includes branch_id
 
-      vals[:branch_path] = ctx.path_from(context) + branch_path
+      vals[:branch_path] = branch_path(ctx)
 
       # !!! Apply cached branch if availible
       o = self.class.new(vals, &block)
