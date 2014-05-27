@@ -7,8 +7,10 @@ module DatasetBranchContext
 
   def setup_object(o)
     return o if o.frozen?
-    o.send('context=', context) if context and o.respond_to?(:context)
-    o.send('branch_path_context=', o.values.delete(:branch_path_context) || [])
+    if context and o.respond_to?(:context)
+      o.send('context=', context)
+      o.send('branch_path_context=', o.values.delete(:branch_path_context) || [])
+    end
     o.freeze
     o
   end
