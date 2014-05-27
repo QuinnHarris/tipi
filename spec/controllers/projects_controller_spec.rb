@@ -95,7 +95,7 @@ describe ProjectsController do
 
     expect(resp_data.first[:created_at]).to eq(resp_data.last[:created_at])
 
-    # Change a node
+    # Change a nodee
     node_attr = attributes_for(:node_ajax, op: 'change', id: node_3_data[:id])
     resp_data = write_request(project.version, node_attr)
     expect(resp_data).to have(1).items
@@ -103,5 +103,10 @@ describe ProjectsController do
     expect(node_data[:id]).to be > node_attr[:id]
     expect(node_data.except(:id, :created_at))
       .to eq(node_attr.except(:id).merge(node_3_data.slice(:record_id)))
+
+    # Check post_doc interface
+    node_attr = attributes_for(:node_ajax)
+    post :post_doc, { id: project.version, version: node_data[:id], body: node_attr[:doc] }
+
   end
 end

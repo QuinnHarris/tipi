@@ -153,7 +153,17 @@ class ProjectsController < ApplicationController
         render :json => data
       end
     end
-  end 
+  end
+
+  def post_doc
+    node = nil
+    @project.context do
+      node = Node.where(version: Integer(params[:version])).first
+      node = node.create(doc: params[:body])
+    end
+
+    render :json => node.client_values
+  end
 
   # POST request at /projects/NUMBER/write (calls write below)
   # Append 'write' to the 'data-path' attribute to get URL

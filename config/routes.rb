@@ -62,7 +62,8 @@ Rails.application.routes.draw do
     member do
       get :info
       get :search
-      
+
+      post :post_doc
       post :write
       
       get :clone
