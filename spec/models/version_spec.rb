@@ -182,6 +182,11 @@ describe Branch do
       expect(node_c.to).to eq([])
       expect(node_c.from).to eq([node_a_b])
 
+      # Edge in this branch
+      expect(node_a_a.add_to(node_c)).to be_an_instance_of(Edge)
+      expect(node_a_a.to(true)).to eq([node_b, node_c])
+      expect(node_c.from).to eq([node_a_a, node_a_b])
+
       # Modify
       expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_a_a, node_a_b = node_a_list.sort_by { |n| n.branch_path }

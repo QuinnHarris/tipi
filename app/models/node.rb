@@ -84,7 +84,6 @@ module Sequel
             current_context.dataset do |context_data|
               dataset = r.associated_class.raw_dataset
 
-
               ds = dataset.from(r[:join_table])
 
               # Select edges connected to this node
@@ -96,6 +95,8 @@ module Sequel
                                                                edge_src_path.length,
                                                                0))] =>
                                 edge_src_path)
+
+              order_cols = []
 
               if r[:inter_branch]
                 table_common = r[:join_table] #:connect_table
@@ -110,62 +111,74 @@ module Sequel
 
                 ds_br = Branch.context_dataset_from_set(ds.exclude(:in_context),
                                                         :"#{r[:right_key_prefix]}_branch_id")
-                context_data = ds_br.union(
-                    db.from(context_data)
-                    .select_append(Sequel.as(nil, :context_id)))
 
                 ds = ds.with(table_common, ds_common)
+
+                context_data = ds_br.union(
+                    db.from(context_data)
+                      .select_append(Sequel.as(nil, :context_id)))
+
+                ds = ds.where { (Sequel.expr(:context_id => nil) & :in_context) |
+                                Sequel.expr(:context_id => :"#{r[:right_key_prefix]}_branch_id") }
+              else
+                ds = ds.join_branch(context_data,
+                                    join_table: r[:join_table],
+                                    table_alias: :branch_edges)
+                order_cols << Sequel.qualify(:branch_edges, :depth)
+                order_cols << Sequel.qualify(r[:join_table], :version).desc
               end
 
               # Join final nodes
-              ds = ds.join(:nodes, :record_id => :"#{r[:right_key_prefix]}_record_id")
+              ds = ds.join(:nodes,
+                           :record_id => Sequel.qualify(r[:join_table],
+                                                        "#{r[:right_key_prefix]}_record_id") )
 
               # Join branch context table(s)
-              tables = [:nodes]
-              tables.unshift(r[:join_table]) unless r[:inter_branch]
-              tables.each do |table|
-                ds = ds.join_branch(
-                    context_data,
-                    context_column: r[:inter_branch] && :"#{r[:right_key_prefix]}_branch_id",
-                    join_table: table,
-                    table_alias: :"branch_#{table}")
-              end
+              ds = ds.join_branch(context_data,
+                                  join_table: :nodes,
+                                  table_alias: :branch_nodes)
+              order_cols << Sequel.qualify(:branch_nodes, :depth)
+              order_cols << Sequel.qualify(:nodes, :version).desc
 
               # Exclude final nodes based on node branch_path
               edge_dst_path = Sequel.pg_array(:"#{r[:right_key_prefix]}_branch_path")
-              branch_path_ctx = Sequel.qualify(ds.opts[:last_joined_table], :branch_path).pg_array
-              branch_path_record = Sequel.qualify(:nodes, :branch_path)
-              branch_path_select = branch_path_ctx.concat(branch_path_record)
+              branch_path_ctx = Sequel.qualify(:branch_nodes, :branch_path).pg_array
+              branch_path_select = branch_path_ctx.concat(
+                                        Sequel.qualify(:nodes, :branch_path))
               ds = ds.where(branch_path_select[
                                 ExRange.new(1, Sequel.function(:coalesce,
                                                                edge_dst_path.length,
                                                                0))] =>
                       edge_dst_path)
 
-              # Exclude final nodes based on source context branch_path
-              # Ensures nodes will only link to edges in the same branch path
-              # if those nodes/edges are duplicated by a merge
+              # NEED TO CHECK THIS MORE
+              # Exclude final nodes based on left context branch_path
+              # Ensures nodes will only link to other nodes in the same branch path
+              # if those nodes are duplicated by a merge
               unless branch_path_context.empty?
                 this_branch_path_context = Sequel.pg_array_op(branch_path_context)
-                ds = ds.where(this_branch_path_context[
-                                  ExRange.new(1, Sequel.function(:coalesce,
-                                                                 branch_path_ctx.length,
-                                                                 0))] =>
-                                  branch_path_ctx[(1..branch_path_context.length)])
+                array_bounds = ExRange.new(1,
+                                   Sequel.function(:LEAST,
+                                       Sequel.function(:coalesce,
+                                                       branch_path_ctx.length,
+                                                       0),
+                                       branch_path_context.length) )
+                array_bounds =  ExRange.new(1,
+                                   Sequel.function(:coalesce,
+                                      Sequel.qualify(:branch_edges, :branch_path)
+                                        .pg_array.length,
+                                      0) ) unless r[:inter_branch]
+                ds = ds.where(this_branch_path_context[array_bounds] =>
+                                  branch_path_ctx[array_bounds])
               end
 
-              ds = ds.select(*(r.associated_class.columns-[:branch_path]).map { |n|
-                                Sequel.qualify(:nodes, n) },
-                             branch_path_record,
+              ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
                              branch_path_ctx.as(:branch_path_context),
                              Sequel.as(Sequel.qualify(r[:join_table], :deleted),
                                        :join_deleted),
                              Sequel.function(:rank)
                                .over(:partition => [:record_id, branch_path_select],
-                                     :order => tables.map do |t|
-                                       [Sequel.qualify("branch_#{t}", :depth),
-                                        Sequel.qualify(t, :version).desc]
-                                     end.flatten))
+                                     :order => order_cols))
 
               ds.from_self
                 .where(:rank => 1, :deleted => false, :join_deleted => false)
@@ -190,9 +203,9 @@ module Sequel
               end
 
           h.merge!(:"#{opts[:left_key_prefix]}_record_id" => record_id,
-                   :"#{opts[:left_key_prefix]}_branch_path" => branch_path_record,
+                   :"#{opts[:left_key_prefix]}_branch_path" => branch_path,
                    :"#{opts[:right_key_prefix]}_record_id" => node.record_id,
-                   :"#{opts[:right_key_prefix]}_branch_path" => node.branch_path_record,
+                   :"#{opts[:right_key_prefix]}_branch_path" => node.branch_path,
                    :created_at => created_at || self.class.dataset.current_datetime,
                    :deleted => deleted ? true : false)
 

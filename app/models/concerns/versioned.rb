@@ -46,13 +46,8 @@ module DatasetBranchContext
         Sequel.qualify(options[:join_table], :branch_id) : :branch_id
 
     join(context_data, { :branch_id => join_column }, options) do |j, lj|
-      exp = Sequel.expr(Sequel.qualify(j, :version) => nil) |
+      Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
-      if options[:context_column]
-        exp &= (Sequel.expr(:context_id => nil) & :in_context) |
-            Sequel.expr(:context_id => options[:context_column])
-      end
-      exp
     end
   end
 
@@ -137,6 +132,9 @@ module Versioned
       super(obj) && (obj.branch_path_context == branch_path_context)
     end
 
+    def inspect
+      "#<#{model.name} ctx=#{@context.id},#{@context.version},[#{@branch_path_context.join(',')}] @values=#{inspect_values}>"
+    end
 
     # Dataset for latest version of rows within the provided branch (and predecessors)
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
@@ -146,15 +144,14 @@ module Versioned
         ds = raw_dataset.join_branch(branch_context_dataset)
 
         branch_path_ctx = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
-        branch_path_record = Sequel.qualify(table_name, :branch_path)
 
-        ds = ds.select(*(columns - [:branch_path]).map { |n| Sequel.qualify(table_name, n) },
-                       branch_path_record,
+        ds = ds.select(Sequel::SQL::ColumnAll.new(table_name),
                        branch_path_ctx.as(:branch_path_context) )
         
         next ds if options[:versions]
 
-        ds.latest_versions(branch_path_ctx.pg_array.concat(branch_path_record),
+        ds.latest_versions(branch_path_ctx.pg_array.concat(
+                               Sequel.qualify(table_name, :branch_path)),
                            options[:deleted])
           .select(*columns, :branch_path_context)
       end
@@ -237,7 +234,7 @@ module Versioned
 
       vals[:branch_path] = branch_path(ctx)
 
-      # !!! Apply cached branch if availible
+      # !!! Apply cached branch if available
       o = self.class.new(vals, &block)
       o.values.merge!(:record_id => record_id)
       o.send('previous=', self)
@@ -263,16 +260,6 @@ module Versioned
       # !!! Shouldn't be able to delete already deleted object
       create(values.merge(deleted: true))
     end
-
-    # Check branch assignments are valid
-
-    # Freeze objects retrieved from DB
-    # Now done in dataset module
-#    def self.call(values)
-#      o = super(values)
-#      o.freeze
-#      o
-#    end
 
     private
     # Freeze objects after save
