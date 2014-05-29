@@ -107,25 +107,48 @@ module Sequel
                                   db[context_data].select(:branch_id))
                     .as(:in_context))
 
+                if ctx_ver = current_context.version
+                  ds_common = ds_common.where { |o| o.version < ctx_ver }
+                end
+
                 ds = dataset.from(table_common)
 
-                ds_br = Branch.context_dataset_from_set(ds.exclude(:in_context),
-                                                        :"#{r[:right_key_prefix]}_branch_id")
+                ds_in = ds.where(:in_context).join_branch(context_data,
+                                                          join_column: :"#{r[:right_key_prefix]}_branch_id")
+                          .select(Sequel::SQL::ColumnAll.new(table_common),
+                                  Sequel.as(:depth, :branch_edge_depth),
+                                  Sequel.as(:branch_path, :branch_edge_path))
 
-                ds = ds.with(table_common, ds_common)
+                ds_out = ds.exclude(:in_context)
+                           .select_append(Sequel.as(0, :branch_edge_depth),
+                                          Sequel.as(nil, :branch_edge_path))
 
-                context_data = ds_br.union(
-                    db.from(context_data)
-                      .select_append(Sequel.as(nil, :context_id)))
+                ds = dataset.from(Sequel::SQL::AliasedExpression.new(ds_in.union(ds_out),
+                                                                     r[:join_table]))
+                            .with(table_common, ds_common)
 
-                ds = ds.where { (Sequel.expr(:context_id => nil) & :in_context) |
-                                Sequel.expr(:context_id => :"#{r[:right_key_prefix]}_branch_id") }
+                order_cols << Sequel.qualify(r[:join_table], :branch_edge_depth)
               else
                 ds = ds.join_branch(context_data,
-                                    join_table: r[:join_table],
                                     table_alias: :branch_edges)
                 order_cols << Sequel.qualify(:branch_edges, :depth)
-                order_cols << Sequel.qualify(r[:join_table], :version).desc
+              end
+
+              order_cols << Sequel.qualify(r[:join_table], :version).desc
+
+
+              # Change context_data to include context table for inter branch dst
+              if r[:inter_branch]
+                ds_br = Branch.context_dataset_from_set(dataset.from(table_common)
+                                                        .exclude(:in_context),
+                                                        :"#{r[:right_key_prefix]}_branch_id",
+                                                        ctx_ver)
+                context_data = ds_br.union(
+                    db.from(context_data)
+                    .select_append(Sequel.as(nil, :context_id)))
+
+                ds = ds.where { (Sequel.expr(:context_id => nil) & :in_context) |
+                    Sequel.expr(:context_id => :"#{r[:right_key_prefix]}_branch_id") }
               end
 
               # Join final nodes
@@ -135,7 +158,6 @@ module Sequel
 
               # Join branch context table(s)
               ds = ds.join_branch(context_data,
-                                  join_table: :nodes,
                                   table_alias: :branch_nodes)
               order_cols << Sequel.qualify(:branch_nodes, :depth)
               order_cols << Sequel.qualify(:nodes, :version).desc
@@ -145,11 +167,10 @@ module Sequel
               branch_path_ctx = Sequel.qualify(:branch_nodes, :branch_path).pg_array
               branch_path_select = branch_path_ctx.concat(
                                         Sequel.qualify(:nodes, :branch_path))
-              ds = ds.where(branch_path_select[
-                                ExRange.new(1, Sequel.function(:coalesce,
-                                                               edge_dst_path.length,
-                                                               0))] =>
-                      edge_dst_path)
+              # INCLUDE AND TEST WITH OTHER SCHEMA CHANGES
+              #ds = ds.where(Sequel.function(:array_cmp_tail,
+              #                              branch_path_select,
+              #                              edge_dst_path))
 
               # NEED TO CHECK THIS MORE
               # Exclude final nodes based on left context branch_path
@@ -157,19 +178,20 @@ module Sequel
               # if those nodes are duplicated by a merge
               unless branch_path_context.empty?
                 this_branch_path_context = Sequel.pg_array_op(branch_path_context)
-                array_bounds = ExRange.new(1,
-                                   Sequel.function(:LEAST,
-                                       Sequel.function(:coalesce,
-                                                       branch_path_ctx.length,
-                                                       0),
-                                       branch_path_context.length) )
-                array_bounds =  ExRange.new(1,
-                                   Sequel.function(:coalesce,
-                                      Sequel.qualify(:branch_edges, :branch_path)
-                                        .pg_array.length,
-                                      0) ) unless r[:inter_branch]
-                ds = ds.where(this_branch_path_context[array_bounds] =>
-                                  branch_path_ctx[array_bounds])
+                if r[:inter_branch]
+                  array_length = Sequel.function(:LEAST,
+                                    Sequel.function(:coalesce,
+                                                    branch_path_ctx.length,
+                                                    0),
+                                    branch_path_context.length)
+                else
+                  array_length = Sequel.function(:coalesce,
+                                    Sequel.qualify(:branch_edges, :branch_path)
+                                      .pg_array.length,
+                                    0)
+                end
+                ds = ds.where(this_branch_path_context[ExRange.new(1, array_length)] =>
+                                  branch_path_ctx[ExRange.new(1, array_length)])
               end
 
               ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),

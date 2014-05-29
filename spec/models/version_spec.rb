@@ -156,8 +156,7 @@ describe Branch do
     # node_a has retained br_a context
     expect(node_a.to).to eq([node_b])
 
-    br_d = Branch.merge(br_a, br_b, name: 'Branch D (A B Merge)')
-    br_d.context do
+    br_d = Branch.merge(br_a, br_b, name: 'Branch D (A B Merge)') do
       # Node A
       expect { node_a.to }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_a_list = Node.where(name: 'Node A').all

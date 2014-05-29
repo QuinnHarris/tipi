@@ -326,17 +326,21 @@ class Branch < Sequel::Model
     has_merge_point? || Rails.env.development?
   end
 
-  def self.context_dataset(branch_id, name = nil, merge_point = nil, version = nil)
-    # Select this record as the start point of the recursive query
-    # Include the version (or null) column used by recursive part
-    b_ds = db[].select(
-        Sequel.as(branch_id, :branch_id),
+  def self.context_dataset_select_list(branch_id, version)
+    [   Sequel.as(branch_id, :branch_id),
         Sequel.cast(nil, :integer).as(:successor_id),
         Sequel.cast(version, :bigint).as(:version),
         Sequel.as(0, :depth),
-        Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_path) )
+        Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path) ]
+  end
+
+  def self.context_dataset(branch_id, name = nil, merge_point = nil, version = nil)
+    # Select this record as the start point of the recursive query
+    # Include the version (or null) column used by recursive part
+    b_ds = db[].select(*context_dataset_select_list(branch_id, version))
 
     b_ds = b_ds.select_append(Sequel.as(name, :name)) if use_context_name?
+
     b_ds = b_ds.select_append(Sequel.as(merge_point || false,
                                         :merge_point) ) if has_merge_point?
 
@@ -348,17 +352,14 @@ class Branch < Sequel::Model
       ds = ds.join(table_name, :id => join_column)
     end
 
-    ds = ds.distinct(join_column).select(
-        Sequel.as(join_column, :branch_id),
-        Sequel.cast(nil, :integer).as(:successor_id),
-        Sequel.cast(version, :bigint).as(:version),
-        Sequel.as(0, :depth),
-        Sequel.cast(Sequel.pg_array([]), 'integer[]').as(:branch_path) )
+    ds = ds.distinct(join_column)
+           .select(*context_dataset_select_list(join_column, version))
 
     ds = ds.select_append(:name) if use_context_name?
+
     ds = ds.select_append(Sequel.function(:coalesce,
-                            :merge_point,
-                            false).as(:merge_point)) if has_merge_point?
+                                          :merge_point,
+                                          false).as(:merge_point)) if has_merge_point?
 
     ds = ds.select_append(Sequel.as(join_column, :context_id))
 

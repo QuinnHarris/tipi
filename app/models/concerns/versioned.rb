@@ -42,8 +42,7 @@ module DatasetBranchContext
   end
 
   def join_branch(context_data, options = {})
-    join_column = options[:join_table] ?
-        Sequel.qualify(options[:join_table], :branch_id) : :branch_id
+    join_column = options[:join_column] || :branch_id
 
     join(context_data, { :branch_id => join_column }, options) do |j, lj|
       Sequel.expr(Sequel.qualify(j, :version) => nil) |
