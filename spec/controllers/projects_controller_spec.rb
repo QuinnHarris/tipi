@@ -35,7 +35,7 @@ describe ProjectsController do
 
       node_data = resp_data.first
       expect(node_data[:id]).to be      
-      expect(node_data.except(:id, :record_id, :created_at)).to eq(node_attr)
+      expect(node_data.except(:id, :record_id, :branch_path, :created_at)).to eq(node_attr)
 
       node_data
     end
@@ -47,21 +47,19 @@ describe ProjectsController do
     resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
 
-    # !!! except should be removed when implemented
-    data << (edge_data = resp_data.first.symbolize_keys.except(:created_at))
-    expect(edge_data.except(:created_at)).to eq(edge_attr)
+    data << (edge_data = resp_data.first.symbolize_keys)
+    expect(edge_data.except(:id, :branch_path, :v_record_id, :u_record_id, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
     expect(response_json).to match_array(data)
 
     # Remove Edge
-    data.delete(edge_attr)
+    data.delete(edge_data)
     edge_attr.merge!(op: 'remove')
     resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
-    # !!! except should be removed when implemented
-    expect(resp_data.first.except(:created_at)).to eq(edge_attr)
+    expect(resp_data.first.except(:id, :branch_path, :v_record_id, :u_record_id, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
@@ -101,7 +99,7 @@ describe ProjectsController do
     expect(resp_data).to have(1).items
     node_data = resp_data.first
     expect(node_data[:id]).to be > node_attr[:id]
-    expect(node_data.except(:id, :created_at))
+    expect(node_data.except(:id, :branch_path, :created_at))
       .to eq(node_attr.except(:id).merge(node_3_data.slice(:record_id)))
 
     # Check post_doc interface

@@ -116,6 +116,12 @@ describe Branch do
     
   end
 
+  def expect_connect(src, op, list)
+    expect(src.send(op)).to eq(list)
+    # Should this have compact?
+    expect(src.send("#{op}_edge").map(&op).compact).to match_array(list)
+  end
+
   it "can link nodes with edges" do
     node_a = node_b = node_c = nil
     br_a = Branch.create(name: 'Branch A') do
@@ -123,11 +129,11 @@ describe Branch do
       node_b = Node.create(name: 'Node B')
       expect(node_a.add_to(node_b)).to be_an_instance_of(Edge)
 
-      expect(node_a.to).to eq([node_b])
-      expect(node_a.from).to eq([])
+      expect_connect(node_a, :to, [node_b])
+      expect_connect(node_a, :from, [])
 
-      expect(node_b.to).to eq([])
-      expect(node_b.from).to eq([node_a])
+      expect_connect(node_b, :to, [])
+      expect_connect(node_b, :from, [node_a])
     end
  
 #    !!!! Need a duplicate add check but unique constraint doesn't work because of add remove then add possibility   
@@ -140,21 +146,21 @@ describe Branch do
       node_c = Node.create(name: 'Node C')
       expect(node_c.add_from(node_a)).to be_an_instance_of(Edge)
 
-      expect(node_a.to).to match_array([node_b, node_c])
+      expect_connect(node_a, :to, [node_b, node_c])
 
       node_b.delete
 
-      expect(node_a.to).to eq([node_c])
+      expect_connect(node_a, :to, [node_c])
     end
 
     br_c = br_b.fork(name: 'Branch C') do
-      expect(node_a.to).to eq([node_c])
+      expect_connect(node_a, :to, [node_c])
       node_a.remove_to(node_c)
-      expect(node_a.to).to eq([])
+      expect_connect(node_a, :to, [])
     end
 
     # node_a has retained br_a context
-    expect(node_a.to).to eq([node_b])
+    expect_connect(node_a, :to, [node_b])
 
     br_d = Branch.merge(br_a, br_b, name: 'Branch D (A B Merge)') do
       # Node A
@@ -164,6 +170,7 @@ describe Branch do
       node_a_a, node_a_b = node_a_list
       expect(node_a_a).to_not eq(node_a_b)
 
+      # expect_connect fails here
       expect(node_a_a.to).to eq(bp_match([[node_b, br_a]]))
       expect(node_a_b.to).to eq(bp_match([[node_c, br_b]]))
       node_a_list.each { |node_a| expect(node_a.from).to eq([]) }

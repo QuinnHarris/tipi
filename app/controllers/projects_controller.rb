@@ -103,16 +103,19 @@ class ProjectsController < ApplicationController
   #         'id': INTEGER,   // Unique instance server identifier for object
   #        'cid': ANYTHING,  // Unique client session identifier
   #  'record_id': INTEGER,   // Unique record identifier, stays same with change
+  #'branch_path': [INTEGER], // Must combine with id or record_id to be globally unique
   # 'created_at': DATETIME   // Date and time object was created
   #       'name': STRING,    // Name of node
   #        'doc': STRING,    // String of document
   #    . . .
   #   If type is 'edge':
-  #         'id': INTEGER,   // NOT IMPLEMENTED, needed for versioning
-  # 'created_at': DATETIME   // NOT IMPLEMENTED, Date and time object was created
+  #         'id': INTEGER,   // needed for versioning
+  # 'created_at': DATETIME   // Date and time object was created
   #          'u': INTEGER,   // Refers to 'id' of an existing node
+  #'u_record_id': INTEGER,   // Refers to 'record_id' of an existing node
   #         'cu': ANYTHING   // Refers to 'cid' of an existing node
   #          'v': INTEGER,   // Refers to 'id' of an existing node
+  #'v_record_id': INTEGER,   // Refers to 'record_id' of an existing node
   #         'cv': ANYTHING,  // Refers to 'cid' of an existing node
   #   }
   #
@@ -138,8 +141,15 @@ class ProjectsController < ApplicationController
           @nodes = Node.exclude(:type => 'Project').all
 
           @nodes.each do |n|
-            n.to.each do |to|
-              @edges << { v: n.version, u: to.version }
+            n.to_edge.each do |edge|
+              @edges << {
+                  id: edge.version,
+                  branch_path: edge.branch_path,
+                  created_at: edge.created_at,
+                  v_record_id: n.record_id,
+                  u_record_id: edge.to.record_id,
+                          v: n.version,
+                          u: edge.to.version }
             end
           end
         end
@@ -231,6 +241,7 @@ class ProjectsController < ApplicationController
               end
             end
             hash.merge(fields).merge('id' => node.version,
+                                     'branch_path' => node.branch_path,
                                      'record_id' => node.record_id,
                                      'created_at' => node.created_at)
 
@@ -253,9 +264,13 @@ class ProjectsController < ApplicationController
               n
             end
 
-            from.send("#{op}_to", to, nil, created_at)
-            hash.merge('u' => to.version, 'v' => from.version,
-                       'created_at' => created_at)
+            edge = from.send("#{op}_to", to, nil, created_at)
+            hash.merge('id' => edge.version,
+                       'branch_path' => edge.branch_path,
+                       'created_at' => edge.created_at,
+                       'v_record_id' => from.record_id,
+                       'u_record_id' => to.record_id,
+                       'u' => to.version, 'v' => from.version)
           else
             raise "Expected type to be Node or Edge"
           end
