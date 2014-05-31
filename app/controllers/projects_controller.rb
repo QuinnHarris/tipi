@@ -66,7 +66,7 @@ class ProjectsController < ApplicationController
     if params[:local]
       ds = Node.dataset(@project.context)
     else
-      ds = Node.dataset.latest_versions
+      ds = Node.dataset.finalize
     end
 
     @results =

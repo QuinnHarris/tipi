@@ -1,34 +1,4 @@
-# Used to use function in pg array range accessors
-class ExRange < Range
-  def initialize(b, e)
-    @begin, @end = b, e
-  end
-  attr_reader :begin, :end
-end
-
 module Sequel
-  module Postgres
-    class ArrayOp
-      # Possible inclusion in Sequel to make pg_array_op perform as expected with arrays
-      def initialize(value)
-        if value.instance_of?(Array)
-          super Sequel.pg_array(value)
-        else
-          super value
-        end
-      end
-
-      def [](key)
-        b = self
-        # Kludge to wrap array in parenthesis
-        b = SQL::Function.new('', b) if value.is_a?(PGArray)
-        s = Sequel::SQL::Subscript.new(b, [key])
-        s = ArrayOp.new(s) if key.is_a?(Range)
-        s
-      end
-    end
-  end
-
   module Plugins
   module Versioning
     module InstanceMethods
@@ -82,11 +52,11 @@ module Sequel
           ds = ds_base.where(:in_context)
         end
 
-        ds = ds.join_branch(context_data,
-                            join_column: r[:inter_branch] && r[:right_branch_id],
-                            table_alias: :branch_edges)
+        ds = ds.join_context(context_data,
+                             join_column: r[:inter_branch] && r[:right_branch_id],
+                             table_alias: :branch_edges)
 
-        branch_path_select = ds.last_branch_context_column.concat(
+        branch_path_select = ds.last_branch_path_context.concat(
             Sequel.qualify(r[:join_table], r[:left_branch_path]))
 
         ds = ds.where(branch_path_select => branch_path)
@@ -99,15 +69,18 @@ module Sequel
 
           ds_in = ds
           ds_out = ds_base.exclude(:in_context)
-          .select_append(Sequel.as(0, :edge_branch_depth),
-                         Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:edge_branch_path))
+            .select_append(Sequel.as(0, :edge_branch_depth),
+                           Sequel.cast(Sequel.pg_array([]), 'integer[]')
+                             .as(:edge_branch_path))
 
           ds = dataset.from(Sequel::SQL::AliasedExpression.new(ds_in.union(ds_out),
                                                                r[:join_table]))
                       .with(table_common, ds_common)
 
-          ds.opts[:last_branch_context_column] = Sequel.qualify(r[:join_table], :edge_branch_path)
-          ds.opts[:order_columns] = [Sequel.qualify(r[:join_table], :edge_branch_depth),
+          ds.opts[:last_branch_path_context] = Sequel.qualify(r[:join_table],
+                                                              :edge_branch_path)
+          ds.opts[:order_columns] = [Sequel.qualify(r[:join_table],
+                                                    :edge_branch_depth),
                                      ds_in.opts[:order_columns].last]
         end
 
@@ -133,20 +106,17 @@ module Sequel
         end
 
         # Join branch context table(s)
-        ds = ds.join_branch(context_data,
+        ds = ds.join_context(context_data,
                             table_alias: :branch_nodes)
 
         # Exclude final nodes based on node branch_path
-        node_branch_path_select = ds.last_branch_context_column.concat(
-            Sequel.qualify(:nodes, :branch_path))
-
         if r[:inter_branch]
 
         else
-          ds = ds.where(node_branch_path => node_branch_path_select)
+          ds = ds.where(node_branch_path => ds.last_branch_path)
         end
 
-        [ds, node_branch_path_select]
+        ds
       end
     end
 
@@ -181,37 +151,6 @@ module Sequel
                            prefix)
         end
 
-        opts[:select] = nil
-        opts[:dataset] = proc do |r|
-          current_context.not_included_or_duplicated!(context, false)
-          current_context.dataset do |context_data|
-            dataset = r.associated_class.raw_dataset
-            ds  = dataset_to_edge(dataset, context_data, r)
-
-            # Join final nodes
-            ds = ds.join(:nodes,
-                         :record_id => Sequel.qualify(r[:join_table],
-                                                      r[:right_record_id]) )
-
-            ds, node_branch_path_select =
-                dataset_from_edge(ds, r, context_data,
-                                  Sequel.qualify(:branch_edges, :branch_path).pg_array.concat(
-                                      Sequel.qualify(r[:join_table], r[:right_branch_path])))
-
-            ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
-                           ds.last_branch_context_column.as(:branch_path_context),
-                           Sequel.as(Sequel.qualify(r[:join_table], :deleted),
-                                     :join_deleted),
-                           Sequel.function(:rank)
-                             .over(:partition => [:record_id, node_branch_path_select],
-                                   :order => ds.opts[:order_columns]))
-
-            ds.from_self
-              .where(:rank => 1, :deleted => false, :join_deleted => false)
-              .select(*r.associated_class.columns, :branch_path_context)
-          end
-        end
-
         opts[:adder] = proc do |node, branch = nil, created_at = nil, deleted = nil|
           ctx = current_context(branch, false)
 
@@ -241,6 +180,29 @@ module Sequel
         end
         # _remove_ and _remove_all_
 
+        opts[:select] = nil
+        opts[:dataset] = proc do |r|
+          current_context.not_included_or_duplicated!(context, false)
+          current_context.dataset do |context_data|
+            dataset = r.associated_class.raw_dataset
+            ds  = dataset_to_edge(dataset, context_data, r)
+
+            # Join final nodes
+            ds = ds.join(:nodes,
+                         :record_id => Sequel.qualify(r[:join_table],
+                                                      r[:right_record_id]) )
+
+            ds = dataset_from_edge(ds, r, context_data,
+                                   Sequel.qualify(:branch_edges,
+                                                  :branch_path).pg_array.concat(
+                                       Sequel.qualify(r[:join_table],
+                                                      r[:right_branch_path]) ) )
+
+            ds.finalize(extra_deleted_column: Sequel.qualify(r[:join_table],
+                                                             :deleted))
+          end
+        end
+
         many_to_many(name, opts, &block)
       end
 
@@ -258,15 +220,10 @@ module Sequel
                                  left_record_id: r[:record_id],
                                  left_branch_path: r[:branch_path])
 
-            ds = ds.select(*r.associated_class.columns.map { |c| Sequel.qualify(dataset.first_source_table, c) },
-                           ds.last_branch_context_column.as(:branch_path_context),
-                           Sequel.function(:rank)
-                           .over(:partition => [r[:target_record_id], r[:target_branch_path]],
-                                 :order => ds.opts[:order_columns]))
+            ds.opts[:last_record_id] = r[:target_record_id]
+            ds.opts[:last_branch_path] = r[:target_branch_path] # Wrong
 
-            ds.from_self
-              .where(:rank => 1, :deleted => false)
-              .select(*r.associated_class.columns, :branch_path_context)
+            ds.finalize
           end
         end
 
@@ -285,22 +242,12 @@ module Sequel
 
             ds = ds.where(:record_id => send(opts[:record_id]))
 
-            ds, node_branch_path_select =
-                dataset_from_edge(ds, r, context_data,
-                                  Sequel.pg_array(branch_path_context +
-                                                      send(opts[:branch_path]),
-                                                  'integer') )
+            ds = dataset_from_edge(ds, r, context_data,
+                                   Sequel.pg_array(branch_path_context +
+                                                       send(opts[:branch_path]),
+                                                   'integer') )
 
-
-            ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
-                           ds.last_branch_context_column.as(:branch_path_context),
-                           Sequel.function(:rank)
-                           .over(:partition => [:record_id, node_branch_path_select],
-                                 :order => ds.opts[:order_columns]))
-
-            ds.from_self
-              .where(:rank => 1, :deleted => false,)
-              .select(*r.associated_class.columns, :branch_path_context)
+            ds.finalize
           end
         end
 

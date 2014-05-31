@@ -41,7 +41,8 @@ module DatasetBranchContext
     o && setup_object(o)
   end
 
-  def join_branch(context_data, options = {})
+  # Join a branch context table to the current dataset the context will apply to.
+  def join_context(context_data, options = {})
     join_column = options[:join_column] || :branch_id
 
     prior_table = opts[:last_joined_table] || opts[:from].first
@@ -50,67 +51,51 @@ module DatasetBranchContext
       Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
     end
-    ds.opts[:last_branch_context_column] =
+    ds.opts[:last_branch_path_context] =
         Sequel.qualify(ds.opts[:last_joined_table], :branch_path).pg_array
+    ds.opts[:last_branch_path] =
+        ds.opts[:last_branch_path_context].concat(
+            Sequel.qualify(prior_table, :branch_path))
+    ds.opts[:last_record_id] = Sequel.qualify(prior_table, :record_id)
     ds.opts[:order_columns] = (ds.opts[:order_columns] || []) +
         [Sequel.qualify(ds.opts[:last_joined_table], :depth),
          Sequel.qualify(prior_table, :version).desc]
     ds
   end
 
-  def last_branch_context_column
-    @opts[:last_branch_context_column]
-  end
+  def last_branch_path_context; @opts[:last_branch_path_context]; end
+  def last_branch_path; @opts[:last_branch_path]; end
+  def last_record_id; @opts[:last_record_id]; end
 
-  def latest_versions(partition = nil, include_deleted = false)
-    ds = select_append(Sequel.function(:rank)
-                       .over(:partition => [:record_id, partition].compact,
-                             :order => @opts[:order_columns] ||
-                                 [
-                                     Sequel.qualify(model.table_name,
-                                                    :version).desc
-                                 ] ) )
-         .from_self
-         .filter(:rank => 1)
-    ds = ds.filter(:deleted => false) unless include_deleted
-    ds
-  end
-
-  # select_table
-  def latest_versions_new(opts = {})
-    ds = self
-    if opts[:select_table]
-      if opts[:select_cols]
-        ds = ds.select(opts[:select_cols].map { |c| Sequel.qualify(opts[:select_table], c)})
-      else
-        ds = ds.select(Sequel::SQL::ColumnAll.new(opts[:select_table]))
-      end
-    else
-      ds = ds.select(opts[:select_cols]) if opts[:select_cols]
+  # Pick latest versions and remove deleted records
+  def finalize(opts = {})
+    model_table_name = model.raw_dataset.first_source_table
+    ds = select(*model.columns.map { |c|
+                    Sequel.qualify(model_table_name, c) },
+                Sequel.function(:rank)
+                  .over(:partition => [last_record_id || :record_id,
+                                       last_branch_path],
+                        :order     => @opts[:order_columns] ||
+                                        Sequel.qualify(model_table_name,
+                                                       :version).desc))
+    if last_branch_path_context
+      ds = ds.select_append(last_branch_path_context.as(:branch_path_context))
     end
 
-    if opts[:branch_path_context]
-      ds = ds.select_append(opts[:branch_path_context].as(:branch_path_context))
+    if opts[:extra_deleted_column]
+      ds = ds.select_append(opts[:extra_deleted_column].as(:extra_deleted))
     end
 
-    if opts[:extra_deleted_col]
-      ds = ds.select_append(opts[:deleted_col].as(:extra_deleted))
-    end
+    return ds if opts[:include_all]
 
-    ds = ds.select_append(Sequel.function(:rank)
-                       .over(:partition => [:record_id, partition].compact,
-                             :order => [partition && :depth,
-                                        Sequel.qualify(model.table_name,
-                                                       :version).desc
-                             ].compact ) )
-    .from_self
-    .filter(:rank => 1)
+    ds = ds.from_self
+           .where(:rank => 1)
     unless opts[:include_deleted]
       ds = ds.where(:deleted => false)
-      ds = ds.where(:extra_deleted => false) if opts[:extra_deleted_col]
+      ds = ds.where(:extra_deleted => false) if opts[:extra_deleted_column]
     end
-    ds = ds.select(opts[:select_cols]) if opts[:select_cols]
-    ds = ds.select_append(:branch_path_context) if opts[:branch_path_context]
+    ds = ds.select(*model.columns)
+    ds = ds.select_append(:branch_path_context) if last_branch_path_context
     ds
   end
 
@@ -164,7 +149,7 @@ module Versioned
       self[:branch_path]
     end
     def branch_path_context(ctx = nil)
-      Sequel.pg_array((current_context(ctx).path_from(context) || []) + @branch_path_context, 'integer')
+      (current_context(ctx).path_from(context) || []) + @branch_path_context
     end
     private
     def branch_path_context=(val)
@@ -190,23 +175,14 @@ module Versioned
     # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
     private
     def self.dataset_from_context(context, options = {})
-      context.dataset do |branch_context_dataset|
-        ds = raw_dataset.join_branch(branch_context_dataset)
-
-        ds = ds.select(Sequel::SQL::ColumnAll.new(table_name),
-                       ds.last_branch_context_column.as(:branch_path_context) )
-        
-        next ds if options[:versions]
-
-        ds.latest_versions(ds.last_branch_context_column.pg_array.concat(
-                               Sequel.qualify(table_name, :branch_path)),
-                           options[:deleted])
-          .select(*columns, :branch_path_context)
+      context.dataset do |context_dataset|
+        raw_dataset.join_context(context_dataset).finalize(options)
       end
     end
     public
     
-    # Kludgy: change dataset if in a context but only provide new behavoir once as dataset_from_context and methods it calls will call dataset again.
+    # Kludgy: change dataset if in a context but only provide new behavior once
+    # as dataset_from_context and methods it calls will call dataset again.
     # There is probably a better way
     self.singleton_class.send(:alias_method, :raw_dataset, :dataset)
     def self.dataset(branch = nil, options = {})
