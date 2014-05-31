@@ -82,7 +82,7 @@ class ProjectsController < ApplicationController
     if @results.empty?
       # No results just use substring matching
       @results =
-          ds.where(Sequel.like(:name, /#{params[:q]}/))
+          ds.where(Sequel.like(:name, /#{params[:q]}/i))
           .limit(10)
           .all
     end

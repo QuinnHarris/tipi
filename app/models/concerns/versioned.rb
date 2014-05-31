@@ -203,13 +203,13 @@ module Versioned
     end
 
     def self.prev_version(context)
-      ds = dataset_from_context(BranchContext.new(context.branch), versions: true)
+      ds = dataset_from_context(BranchContext.new(context.branch), include_all: true)
       ds = ds.where { |o| o.nodes__version < context.version } if context.version
       ds.max(Sequel.qualify(:nodes, :version))
     end
     def self.next_version(context)
       return nil unless context.version
-      dataset_from_context(BranchContext.new(context.branch), versions: true).where { |o| o.nodes__version > context.version }.min(Sequel.qualify(:nodes, :version))
+      dataset_from_context(BranchContext.new(context.branch), include_all: true).where { |o| o.nodes__version > context.version }.min(Sequel.qualify(:nodes, :version))
     end
 
     private
