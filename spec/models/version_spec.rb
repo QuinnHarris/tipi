@@ -117,8 +117,7 @@ describe Branch do
   end
 
   def expect_connect(src, op, list)
-    expect(src.send(op)).to eq(list)
-    # Should this have compact?
+    expect(src.send(op)).to match_array(list)
     expect(src.send("#{op}_edge").map(&op).compact).to match_array(list)
   end
 
@@ -127,7 +126,12 @@ describe Branch do
     br_a = Branch.create(name: 'Branch A') do
       node_a = Node.create(name: 'Node A')
       node_b = Node.create(name: 'Node B')
-      expect(node_a.add_to(node_b)).to be_an_instance_of(Edge)
+
+      edge = node_a.add_to(node_b)
+      expect(edge).to be_an_instance_of(Edge)
+      expect(edge.context).to eq(node_a.context)
+      expect(edge.to).to eq(node_b)
+      expect(edge.from).to eq(node_a)
 
       expect_connect(node_a, :to, [node_b])
       expect_connect(node_a, :from, [])
@@ -166,14 +170,15 @@ describe Branch do
       # Node A
       expect { node_a.to }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_a_list = Node.where(name: 'Node A').all
+      expect(Node.where(record_id: node_a.record_id).all).to match_array(node_a_list)
       expect(node_a_list).to eq(bp_match([[node_a, br_a], [node_a, br_b]]))
-      node_a_a, node_a_b = node_a_list
+      node_a_a, node_a_b = node_a_list.sort_by { |n| n.branch_path }
       expect(node_a_a).to_not eq(node_a_b)
 
       # expect_connect fails here
-      expect(node_a_a.to).to eq(bp_match([[node_b, br_a]]))
-      expect(node_a_b.to).to eq(bp_match([[node_c, br_b]]))
-      node_a_list.each { |node_a| expect(node_a.from).to eq([]) }
+      expect_connect(node_a_a, :to, bp_match([[node_b, br_a]]))
+      expect_connect(node_a_b, :to, bp_match([[node_c, br_b]]))
+      node_a_list.each { |node_a| expect_connect(node_a, :from, []) }
 
       # Node B
       # In this case the branch suggests it can be duplicated but node_b is removed
@@ -181,21 +186,20 @@ describe Branch do
       expect { node_b.to }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_b_list = Node.where(name: 'Node B').all
       expect(node_b_list).to eq(bp_match([[node_b, br_a]]))
-      expect(node_b_list.first.to).to eq([])
-      expect(node_b_list.first.from).to eq([node_a_a])
+      expect_connect(node_b_list.first, :to, [])
+      expect_connect(node_b_list.first, :from, [node_a_a])
 
       # Node C
-      expect(node_c.to).to eq([])
-      expect(node_c.from).to eq([node_a_b])
+      expect_connect(node_c, :to, [])
+      expect_connect(node_c, :from, [node_a_b])
 
       # Edge in this branch
       expect(node_a_a.add_to(node_c)).to be_an_instance_of(Edge)
-      expect(node_a_a.to(true)).to eq([node_b, node_c])
-      expect(node_c.from).to eq([node_a_a, node_a_b])
+      expect_connect(node_a_a, :to, [node_b, node_c])
+      expect_connect(node_c, :from, [node_a_a, node_a_b])
 
       # Modify
       expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
-      node_a_a, node_a_b = node_a_list.sort_by { |n| n.branch_path }
       expect(node_a_a.context).to eq(BranchContext.current)
       node_a_a_new = node_a_a.create(name: 'Node A v2')
 

@@ -142,16 +142,6 @@ Sequel.migration do
       CREATE CONSTRAINT TRIGGER cycle_test
         AFTER INSERT OR UPDATE ON branch_relations
         FOR EACH ROW EXECUTE PROCEDURE cycle_test();
-
-
-      CREATE FUNCTION array_cmp_tail(base integer[], cmp integer[])
-        RETURNS BOOLEAN AS $$
-      DECLARE
-        len INTEGER := COALESCE(array_length(base, 1), 0);
-      BEGIN
-        RETURN base[len - COALESCE(array_length(cmp, 1), 0) + 1:len] = cmp;
-      END;
-      $$ LANGUAGE plpgsql;
     )
 
     create_version_table :nodes do

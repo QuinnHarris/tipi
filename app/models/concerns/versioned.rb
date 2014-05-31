@@ -44,22 +44,73 @@ module DatasetBranchContext
   def join_branch(context_data, options = {})
     join_column = options[:join_column] || :branch_id
 
-    join(context_data, { :branch_id => join_column }, options) do |j, lj|
+    prior_table = opts[:last_joined_table] || opts[:from].first
+
+    ds = join(context_data, { :branch_id => join_column }, options) do |j, lj|
       Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
     end
+    ds.opts[:last_branch_context_column] =
+        Sequel.qualify(ds.opts[:last_joined_table], :branch_path).pg_array
+    ds.opts[:order_columns] = (ds.opts[:order_columns] || []) +
+        [Sequel.qualify(ds.opts[:last_joined_table], :depth),
+         Sequel.qualify(prior_table, :version).desc]
+    ds
+  end
+
+  def last_branch_context_column
+    @opts[:last_branch_context_column]
   end
 
   def latest_versions(partition = nil, include_deleted = false)
     ds = select_append(Sequel.function(:rank)
                        .over(:partition => [:record_id, partition].compact,
-                             :order => [partition && :depth,
-                                        Sequel.qualify(model.table_name,
-                                                       :version).desc
-                                       ].compact ) )
+                             :order => @opts[:order_columns] ||
+                                 [
+                                     Sequel.qualify(model.table_name,
+                                                    :version).desc
+                                 ] ) )
          .from_self
          .filter(:rank => 1)
     ds = ds.filter(:deleted => false) unless include_deleted
+    ds
+  end
+
+  # select_table
+  def latest_versions_new(opts = {})
+    ds = self
+    if opts[:select_table]
+      if opts[:select_cols]
+        ds = ds.select(opts[:select_cols].map { |c| Sequel.qualify(opts[:select_table], c)})
+      else
+        ds = ds.select(Sequel::SQL::ColumnAll.new(opts[:select_table]))
+      end
+    else
+      ds = ds.select(opts[:select_cols]) if opts[:select_cols]
+    end
+
+    if opts[:branch_path_context]
+      ds = ds.select_append(opts[:branch_path_context].as(:branch_path_context))
+    end
+
+    if opts[:extra_deleted_col]
+      ds = ds.select_append(opts[:deleted_col].as(:extra_deleted))
+    end
+
+    ds = ds.select_append(Sequel.function(:rank)
+                       .over(:partition => [:record_id, partition].compact,
+                             :order => [partition && :depth,
+                                        Sequel.qualify(model.table_name,
+                                                       :version).desc
+                             ].compact ) )
+    .from_self
+    .filter(:rank => 1)
+    unless opts[:include_deleted]
+      ds = ds.where(:deleted => false)
+      ds = ds.where(:extra_deleted => false) if opts[:extra_deleted_col]
+    end
+    ds = ds.select(opts[:select_cols]) if opts[:select_cols]
+    ds = ds.select_append(:branch_path_context) if opts[:branch_path_context]
     ds
   end
 
@@ -113,7 +164,7 @@ module Versioned
       self[:branch_path]
     end
     def branch_path_context(ctx = nil)
-      (current_context(ctx).path_from(context) || []) + @branch_path_context
+      Sequel.pg_array((current_context(ctx).path_from(context) || []) + @branch_path_context, 'integer')
     end
     private
     def branch_path_context=(val)
@@ -142,14 +193,12 @@ module Versioned
       context.dataset do |branch_context_dataset|
         ds = raw_dataset.join_branch(branch_context_dataset)
 
-        branch_path_ctx = Sequel.qualify(ds.opts[:last_joined_table], :branch_path)
-
         ds = ds.select(Sequel::SQL::ColumnAll.new(table_name),
-                       branch_path_ctx.as(:branch_path_context) )
+                       ds.last_branch_context_column.as(:branch_path_context) )
         
         next ds if options[:versions]
 
-        ds.latest_versions(branch_path_ctx.pg_array.concat(
+        ds.latest_versions(ds.last_branch_context_column.pg_array.concat(
                                Sequel.qualify(table_name, :branch_path)),
                            options[:deleted])
           .select(*columns, :branch_path_context)

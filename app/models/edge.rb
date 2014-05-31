@@ -4,7 +4,8 @@ class Edge < Sequel::Model
 
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
-    ver_many_to_one aspect, :class => Node, inter_branch: false, key: :"#{opposite}_record_id"
+    ver_many_to_one aspect, :class => Node, inter_branch: false,
+                    key: opposite
   end
 end
 

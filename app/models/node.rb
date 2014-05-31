@@ -56,26 +56,20 @@ module Sequel
         opts[:join_class] ? r : o
       end
 
-      def dataset_to_edge(r, context_data, order_cols)
-        dataset = r.associated_class.raw_dataset
+      def dataset_to_edge(dataset, context_data, r)
         ds = dataset.from(r[:join_table])
 
         # Select edges connected to this node
-        ds = ds.where(:"#{r[:left_key_prefix]}_record_id" => record_id)
+        ds = ds.where(r[:left_record_id] => record_id)
 
-        # INCLUDE AND TEST WITH OTHER SCHEMA CHANGES
-        #ds = ds.where(Sequel.function(:array_cmp_tail,
-        #                              Sequel.pg_array_op(branch_path),
-        #                              :"#{r[:left_key_prefix]}_branch_path"))
-
-
-
+        # Split edges between in context and out of context
+        # Treat in context edges the same with or without inter branch
         if r[:inter_branch]
           table_common = r[:join_table] #:connect_table
 
           # Determine if the connecting node is within the same context
           ds_common = ds.select_append(
-              Sequel.expr(:"#{r[:right_key_prefix]}_branch_id" =>
+              Sequel.expr(r[:right_branch_id] =>
                               db[context_data].select(:branch_id))
               .as(:in_context))
 
@@ -83,35 +77,44 @@ module Sequel
             ds_common = ds_common.where { |o| o.version < ctx_ver }
           end
 
-          ds = dataset.from(table_common)
+          ds_base = dataset.from(table_common)
 
-          ds_in = ds.where(:in_context).join_branch(context_data,
-                                                    join_column: :"#{r[:right_key_prefix]}_branch_id")
-          .select(Sequel::SQL::ColumnAll.new(table_common),
-                  Sequel.as(:depth, :branch_edge_depth),
-                  Sequel.as(:branch_path, :branch_edge_path))
+          ds = ds_base.where(:in_context)
+        end
 
-          ds_out = ds.exclude(:in_context)
-          .select_append(Sequel.as(0, :branch_edge_depth),
-                         Sequel.as(nil, :branch_edge_path))
+        ds = ds.join_branch(context_data,
+                            join_column: r[:inter_branch] && r[:right_branch_id],
+                            table_alias: :branch_edges)
+
+        branch_path_select = ds.last_branch_context_column.concat(
+            Sequel.qualify(r[:join_table], r[:left_branch_path]))
+
+        ds = ds.where(branch_path_select => branch_path)
+
+
+        if r[:inter_branch]
+          ds = ds.select(Sequel::SQL::ColumnAll.new(table_common),
+                  Sequel.as(:depth, :edge_branch_depth),
+                  Sequel.as(:branch_path, :edge_branch_path))
+
+          ds_in = ds
+          ds_out = ds_base.exclude(:in_context)
+          .select_append(Sequel.as(0, :edge_branch_depth),
+                         Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:edge_branch_path))
 
           ds = dataset.from(Sequel::SQL::AliasedExpression.new(ds_in.union(ds_out),
                                                                r[:join_table]))
-          .with(table_common, ds_common)
+                      .with(table_common, ds_common)
 
-          order_cols << Sequel.qualify(r[:join_table], :branch_edge_depth)
-        else
-          ds = ds.join_branch(context_data,
-                              table_alias: :branch_edges)
-          order_cols << Sequel.qualify(:branch_edges, :depth)
+          ds.opts[:last_branch_context_column] = Sequel.qualify(r[:join_table], :edge_branch_path)
+          ds.opts[:order_columns] = [Sequel.qualify(r[:join_table], :edge_branch_depth),
+                                     ds_in.opts[:order_columns].last]
         end
-
-        order_cols << Sequel.qualify(r[:join_table], :version).desc
 
         ds
       end
 
-      def dataset_from_edge(ds, r, context_data, order_cols)
+      def dataset_from_edge(ds, r, context_data, node_branch_path)
         dataset = r.associated_class.raw_dataset
 
         # Change context_data to include context table for inter branch dst
@@ -119,68 +122,46 @@ module Sequel
           table_common = r[:join_table]
           ds_br = Branch.context_dataset_from_set(dataset.from(table_common)
                                                   .exclude(:in_context),
-                                                  :"#{r[:right_key_prefix]}_branch_id",
+                                                  r[:right_branch_id],
                                                   current_context.version)
           context_data = ds_br.union(
               db.from(context_data)
               .select_append(Sequel.as(nil, :context_id)))
 
           ds = ds.where { (Sequel.expr(:context_id => nil) & :in_context) |
-              Sequel.expr(:context_id => :"#{r[:right_key_prefix]}_branch_id") }
+              Sequel.expr(:context_id => r[:right_branch_id]) }
         end
-
 
         # Join branch context table(s)
         ds = ds.join_branch(context_data,
                             table_alias: :branch_nodes)
-        order_cols << Sequel.qualify(:branch_nodes, :depth)
-        order_cols << Sequel.qualify(:nodes, :version).desc
 
         # Exclude final nodes based on node branch_path
-        branch_path_ctx = Sequel.qualify(:branch_nodes, :branch_path).pg_array
-        branch_path_select = branch_path_ctx.concat(
+        node_branch_path_select = ds.last_branch_context_column.concat(
             Sequel.qualify(:nodes, :branch_path))
-        # INCLUDE AND TEST WITH OTHER SCHEMA CHANGES
-        #ds = ds.where(Sequel.function(:array_cmp_tail,
-        #                              branch_path_select,
-        #                              :"#{r[:right_key_prefix]}_branch_path"))
 
-        # NEED TO CHECK THIS MORE
-        # Exclude final nodes based on left context branch_path
-        # Ensures nodes will only link to other nodes in the same branch path
-        # if those nodes are duplicated by a merge
-        unless branch_path_context.empty?
-          this_branch_path_context = Sequel.pg_array_op(branch_path_context)
-          if r[:inter_branch]
-            array_length = Sequel.function(:LEAST,
-                                           Sequel.function(:coalesce,
-                                                           branch_path_ctx.length,
-                                                           0),
-                                           branch_path_context.length)
-          else
-            array_length = Sequel.function(:coalesce,
-                                           Sequel.qualify(:branch_edges, :branch_path)
-                                           .pg_array.length,
-                                           0)
-          end
-          ds = ds.where(this_branch_path_context[ExRange.new(1, array_length)] =>
-                            branch_path_ctx[ExRange.new(1, array_length)])
+        if r[:inter_branch]
+
+        else
+          ds = ds.where(node_branch_path => node_branch_path_select)
         end
 
-        [ds, branch_path_ctx, branch_path_select]
+        [ds, node_branch_path_select]
       end
     end
 
     module ClassMethods
-      def ver_common_opts(opts)
-        left_key_prefix = opts.delete(:key) || name
-        opts[:left_key] ||= ["#{left_key_prefix}_record_id"] # branch_path?
-        if right_key_prefix = opts[:right_key_prefix] || opts[:reciprocal]
-          opts[:right_key] = ["#{right_key_prefix}_record_id"]
+      private
+      def ver_common_ops(opts, key_prefix, prefix = nil)
+        key_prefix = "#{key_prefix}_" if key_prefix
+        prefix = "#{prefix}_" if prefix
+        ['record_id', 'branch_path', opts[:inter_branch] && 'branch_id'
+        ].compact.each do |sufix|
+          opts[:"#{prefix}#{sufix}"] ||= :"#{key_prefix}#{sufix}"
         end
-        opts[:left_key_prefix] = left_key_prefix
-        opts[:right_key_prefix] = right_key_prefix
+        opts[:"#{prefix}key"] ||= [opts[:"#{prefix}record_id"]]
       end
+      public
 
       def ver_many_to_many(name, opts=OPTS, &block)
         opts = opts.dup
@@ -193,127 +174,139 @@ module Sequel
           opts[:join_table] = join_table
         end
 
-        ver_common_opts(opts)
+        { left: opts.delete(:key) || name,
+          right: opts[:reciprocal] }.each do |prefix, key_prefix|
+            ver_common_ops(opts,
+                           opts[:"#{prefix}_key_prefix"] ||= key_prefix,
+                           prefix)
+        end
 
-        opts.merge!(
-          :select => nil, # Don't override our select statements
-          :dataset => (proc do |r|
-            current_context.not_included_or_duplicated!(context, false)
-            current_context.dataset do |context_data|
+        opts[:select] = nil
+        opts[:dataset] = proc do |r|
+          current_context.not_included_or_duplicated!(context, false)
+          current_context.dataset do |context_data|
+            dataset = r.associated_class.raw_dataset
+            ds  = dataset_to_edge(dataset, context_data, r)
 
+            # Join final nodes
+            ds = ds.join(:nodes,
+                         :record_id => Sequel.qualify(r[:join_table],
+                                                      r[:right_record_id]) )
 
-              order_cols = []
-              ds = dataset_to_edge(r, context_data, order_cols)
+            ds, node_branch_path_select =
+                dataset_from_edge(ds, r, context_data,
+                                  Sequel.qualify(:branch_edges, :branch_path).pg_array.concat(
+                                      Sequel.qualify(r[:join_table], r[:right_branch_path])))
 
-              # Join final nodes
-              ds = ds.join(:nodes,
-                           :record_id => Sequel.qualify(r[:join_table],
-                                                        "#{r[:right_key_prefix]}_record_id") )
+            ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
+                           ds.last_branch_context_column.as(:branch_path_context),
+                           Sequel.as(Sequel.qualify(r[:join_table], :deleted),
+                                     :join_deleted),
+                           Sequel.function(:rank)
+                             .over(:partition => [:record_id, node_branch_path_select],
+                                   :order => ds.opts[:order_columns]))
 
-              ds, branch_path_ctx, branch_path_select =
-                  dataset_from_edge(ds, r, context_data, order_cols)
+            ds.from_self
+              .where(:rank => 1, :deleted => false, :join_deleted => false)
+              .select(*r.associated_class.columns, :branch_path_context)
+          end
+        end
 
-              ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
-                             branch_path_ctx.as(:branch_path_context),
-                             Sequel.as(Sequel.qualify(r[:join_table], :deleted),
-                                       :join_deleted),
-                             Sequel.function(:rank)
-                               .over(:partition => [:record_id, branch_path_select],
-                                     :order => order_cols))
-
-              ds.from_self
-                .where(:rank => 1, :deleted => false, :join_deleted => false)
-                .select(*r.associated_class.columns, :branch_path_context)
-            end
-          end)
-        )
-        many_to_many(name, opts, &block)
-
-        # Should break sequel convention and return the edge object
-        define_method "_add_#{name}" do |node, branch = nil, created_at = nil, deleted = nil|
+        opts[:adder] = proc do |node, branch = nil, created_at = nil, deleted = nil|
           ctx = current_context(branch, false)
 
           ctx.not_included!(self)
           ctx.not_included!(node) unless opts[:inter_branch]
 
           h = if opts[:inter_branch]
-                { :"#{opts[:left_key_prefix]}_branch_id" => ctx.id,
-                  :"#{opts[:right_key_prefix]}_branch_id" => node.context.id }
+                { opts[:left_branch_id] => ctx.id,
+                  opts[:right_branch_id] => node.context.id }
               else
                 { :branch_id => ctx.branch.id }
               end
 
-          h.merge!(:"#{opts[:left_key_prefix]}_record_id" => record_id,
-                   :"#{opts[:left_key_prefix]}_branch_path" => branch_path,
-                   :"#{opts[:right_key_prefix]}_record_id" => node.record_id,
-                   :"#{opts[:right_key_prefix]}_branch_path" => node.branch_path,
+          h.merge!(opts[:left_record_id] => record_id,
+                   opts[:left_branch_path] => branch_path,
+                   opts[:right_record_id] => node.record_id,
+                   opts[:right_branch_path] => node.branch_path,
                    :created_at => created_at || self.class.dataset.current_datetime,
                    :deleted => deleted ? true : false)
 
           join_class.create(h)
         end
 
-        define_method "_remove_#{name}" do |node, branch = nil, created_at = nil|
+        opts[:remover] = proc do |node, branch = nil, created_at = nil|
           # !!! Must check if the object actually exists
           send("_add_#{name}", node, branch, created_at, true)
         end
         # _remove_ and _remove_all_
+
+        many_to_many(name, opts, &block)
+      end
+
+      def ver_one_to_many(name, opts=OPTS, &block)
+        opts = opts.dup
+        ver_common_ops(opts, opts[:key] || name)
+        ver_common_ops(opts, opts[:target_prefix], :target)
+
+        opts[:dataset] = proc do |r|
+          current_context.not_included_or_duplicated!(context, false)
+          current_context.dataset do |context_data|
+            dataset = r.associated_class.raw_dataset
+            ds = dataset_to_edge(dataset, context_data,
+                                 join_table: dataset.first_source_table,
+                                 left_record_id: r[:record_id],
+                                 left_branch_path: r[:branch_path])
+
+            ds = ds.select(*r.associated_class.columns.map { |c| Sequel.qualify(dataset.first_source_table, c) },
+                           ds.last_branch_context_column.as(:branch_path_context),
+                           Sequel.function(:rank)
+                           .over(:partition => [r[:target_record_id], r[:target_branch_path]],
+                                 :order => ds.opts[:order_columns]))
+
+            ds.from_self
+              .where(:rank => 1, :deleted => false)
+              .select(*r.associated_class.columns, :branch_path_context)
+          end
+        end
+
+        one_to_many(name, opts, &block)
       end
 
       def ver_many_to_one(name, opts=OPTS, &block)
+        opts = opts.dup
+        ver_common_ops(opts, opts[:key] || name)
+        opts[:key] = opts[:record_id] # Kludge to prevent stack level to deep
+
         opts[:dataset] = proc do |r|
           current_context.not_included_or_duplicated!(context, false)
           current_context.dataset do |context_data|
             ds = r.associated_class.raw_dataset
 
-            ds = ds.where(:record_id => send(r[:key]))
-            # !!!CHECK PATH
+            ds = ds.where(:record_id => send(opts[:record_id]))
 
-            order_cols = []
-            ds, branch_path_ctx, branch_path_select =
-                dataset_from_edge(ds, r, context_data, order_cols)
+            ds, node_branch_path_select =
+                dataset_from_edge(ds, r, context_data,
+                                  Sequel.pg_array(branch_path_context +
+                                                      send(opts[:branch_path]),
+                                                  'integer') )
+
 
             ds = ds.select(Sequel::SQL::ColumnAll.new(:nodes),
-                           branch_path_ctx.as(:branch_path_context),
+                           ds.last_branch_context_column.as(:branch_path_context),
                            Sequel.function(:rank)
-                           .over(:partition => [:record_id, branch_path_select],
-                                 :order => order_cols))
+                           .over(:partition => [:record_id, node_branch_path_select],
+                                 :order => ds.opts[:order_columns]))
 
             ds.from_self
-            .where(:rank => 1, :deleted => false,)
-            .select(*r.associated_class.columns, :branch_path_context)
+              .where(:rank => 1, :deleted => false,)
+              .select(*r.associated_class.columns, :branch_path_context)
           end
         end
 
         many_to_one(name, opts, &block)
       end
 
-      def ver_one_to_many(name, opts=OPTS, &block)
-        ver_common_opts(opts)
-        opts[:dataset] = proc do |r|
-          current_context.not_included_or_duplicated!(context, false)
-          current_context.dataset do |context_data|
-            join_table = r.associated_class.raw_dataset.first_source_table
-            order_cols = []
-            ds = dataset_to_edge(r.merge(join_table: join_table), context_data, order_cols)
-
-            branch_path_select = :"#{r[:right_key_prefix]}_branch_path"
-            record_id_select = :"#{r[:right_key_prefix]}_record_id"
-
-            ds = ds.select(*r.associated_class.columns.map { |c|
-                             Sequel.qualify(join_table, c) },
-                           Sequel.function(:rank)
-                           .over(:partition => [record_id_select, branch_path_select],
-                                 :order => order_cols))
-
-            ds.from_self
-            .where(:rank => 1, :deleted => false)
-            .select(*r.associated_class.columns)
-          end
-        end
-
-        one_to_many(name, opts, &block)
-      end
     end
   end
   end
@@ -334,7 +327,7 @@ class Node < Sequel::Model
                      reciprocal: opposite, inter_branch: inter_branch
 
     ver_one_to_many :"#{relation_name}_edge", key: aspect,
-                    :class => join_class, right_key_prefix: opposite,
+                    :class => join_class, target_prefix: opposite,
                     inter_branch: inter_branch, read_only: true
   end
   end
