@@ -35,7 +35,7 @@ describe ProjectsController do
 
       node_data = resp_data.first
       expect(node_data[:id]).to be      
-      expect(node_data.except(:id, :record_id, :branch_path, :created_at)).to eq(node_attr)
+      expect(node_data.except(:id, :record_id, :branch_path, :branch_id, :created_at)).to eq(node_attr)
 
       node_data
     end
@@ -48,7 +48,7 @@ describe ProjectsController do
     expect(resp_data).to have(1).items
 
     data << (edge_data = resp_data.first.symbolize_keys)
-    expect(edge_data.except(:id, :branch_path, :v_record_id, :u_record_id, :created_at)).to eq(edge_attr)
+    expect(edge_data.except(:id, :branch_id, :branch_path, :v_record_id, :v_branch_path, :u_record_id, :u_branch_path, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
@@ -59,7 +59,7 @@ describe ProjectsController do
     edge_attr.merge!(op: 'remove')
     resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
-    expect(resp_data.first.except(:id, :branch_path, :v_record_id, :u_record_id, :created_at)).to eq(edge_attr)
+    expect(resp_data.first.except(:id, :branch_id, :branch_path, :v_record_id, :v_branch_path, :u_record_id, :u_branch_path, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
     get :show, { id: project.version, format: :json }
@@ -99,8 +99,8 @@ describe ProjectsController do
     expect(resp_data).to have(1).items
     node_data = resp_data.first
     expect(node_data[:id]).to be > node_attr[:id]
-    expect(node_data.except(:id, :branch_path, :created_at))
-      .to eq(node_attr.except(:id).merge(node_3_data.slice(:record_id)))
+    expect(node_data.except(:id, :created_at))
+      .to eq(node_attr.except(:id).merge(node_3_data.slice(:record_id, :branch_path, :branch_id)))
 
     # Check post_doc interface
     node_attr = attributes_for(:node_ajax)

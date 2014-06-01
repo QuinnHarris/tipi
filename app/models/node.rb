@@ -26,6 +26,25 @@ module Sequel
         opts[:join_class] ? r : o
       end
 
+      def remove_associated_object(opts, o, *args)
+        klass = opts.associated_class
+        if o.is_a?(Integer) || o.is_a?(String) || o.is_a?(Array)
+          o = remove_check_existing_object_from_pk(opts, o, *args)
+        elsif !o.is_a?(klass)
+          raise(Sequel::Error, "associated object #{o.inspect} not of correct type #{klass}")
+        elsif opts.remove_should_check_existing? && send(opts.dataset_method).where(o.pk_hash).empty?
+          raise(Sequel::Error, "associated object #{o.inspect} is not currently associated to #{inspect}")
+        end
+        raise(Sequel::Error, "model object #{inspect} does not have a primary key") if opts.dataset_need_primary_key? && !pk
+        raise(Sequel::Error, "associated object #{o.inspect} does not have a primary key") if opts.need_associated_primary_key? && !o.pk
+        return if run_association_callbacks(opts, :before_remove, o) == false
+        return if !(r = send(opts._remove_method, o, *args)) && opts.handle_silent_modification_failure?
+        associations[opts[:name]].delete_if{|x| o === x} if associations.include?(opts[:name])
+        remove_reciprocal_object(opts, o)
+        run_association_callbacks(opts, :after_remove, o)
+        opts[:join_class] ? r : o
+      end
+
       def dataset_to_edge(dataset, context_data, r)
         ds = dataset.from(r[:join_table])
 
@@ -167,7 +186,7 @@ module Sequel
               opts[:right_branch_path] => node.branch_path,
           }
 
-          # !!! Implement check with inter_branch
+          # !!! Implement check for inter_branch
           unless opts[:inter_branch]
             ds = join_class.dataset(ctx, no_finalize: true).where(h_record_id)
             h_branch_path.each do |col, val|
@@ -196,10 +215,9 @@ module Sequel
         end
 
         opts[:remover] = proc do |node, branch = nil, created_at = nil|
-          # !!! Must check if the object actually exists
           send("_add_#{name}", node, branch, created_at, true)
         end
-        # _remove_ and _remove_all_
+        #  _remove_all_ ?
 
         opts[:select] = nil
         opts[:dataset] = proc do |r|
@@ -294,19 +312,17 @@ class Node < Sequel::Model
                      join_class: join_class, :class => self,
                      reciprocal: opposite, inter_branch: inter_branch
 
-    ver_one_to_many :"#{relation_name}_edge", key: aspect,
+    ver_one_to_many :"#{relation_name}_edge", key: aspect, reciprocal: opposite,
                     :class => join_class, target_prefix: opposite,
                     inter_branch: inter_branch, read_only: true
   end
   end
 
   def client_values
-    {        id: version,
-      record_id: record_id,
-    branch_path: branch_path,
-     created_at: created_at,
-           name: name,
-            doc: doc }
+    %w(record_id branch_path branch_id created_at name doc)
+      .each_with_object({}) do |attr, hash|
+      hash[attr] = send attr
+    end.merge('id' => version)
   end
 end
 

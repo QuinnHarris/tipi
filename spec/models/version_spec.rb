@@ -117,8 +117,13 @@ describe Branch do
   end
 
   def expect_connect(src, op, list)
+    pri_d = src.associations[op]
     expect(src.send(op)).to match_array(list)
+    expect(src.send(op, true)).to match_array(list) if pri_d
+
+    pri_i = src.associations[:"#{op}_edge"]
     expect(src.send("#{op}_edge").map(&op).compact).to match_array(list)
+    expect(src.send("#{op}_edge", true).map(&op).compact).to match_array(list) if pri_i
   end
 
   it "can link nodes with edges" do

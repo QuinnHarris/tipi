@@ -96,27 +96,29 @@ class ProjectsController < ApplicationController
   # GET request at /projects/NUMBER.json (calls show below)
   #   returns an array of objects each with the following format.
   # Message Format:
-  #   { 'type': 'node' or 'edge',   // Type of object
-  #       'op': 'add', 'change' or 'remove',  // Operation on object
+  #   {     'type': 'node' or 'edge',             // Type of object
+  #           'op': 'add', 'change' or 'remove',  // Operation on object
+  #           'id': INTEGER,   // Depreciated, use version (CHANGE PENDING)
+  #      'version': INTEGER,   // Unique server identifier for object
+  #    'branch_id': INTEGER,   // Branch identifier
+  #   'created_at': DATETIME   // Date and time object was created
   #    . . .
   #   If type is 'node':
-  #         'id': INTEGER,   // Unique instance server identifier for object
-  #        'cid': ANYTHING,  // Unique client session identifier
-  #  'record_id': INTEGER,   // Unique record identifier, stays same with change
-  #'branch_path': [INTEGER], // Must combine with id or record_id to be globally unique
-  # 'created_at': DATETIME   // Date and time object was created
-  #       'name': STRING,    // Name of node
-  #        'doc': STRING,    // String of document
+  #          'cid': ANYTHING,  // Unique client session identifier
+  #    'record_id': INTEGER,   // Unique record identifier, stays same with change
+  #  'branch_path': [INTEGER], // Must combine with id or record_id to be globally unique
+  #         'name': STRING,    // Name of node
+  #          'doc': STRING,    // String of document
   #    . . .
   #   If type is 'edge':
-  #         'id': INTEGER,   // needed for versioning
-  # 'created_at': DATETIME   // Date and time object was created
-  #          'u': INTEGER,   // Refers to 'id' of an existing node
-  #'u_record_id': INTEGER,   // Refers to 'record_id' of an existing node
-  #         'cu': ANYTHING   // Refers to 'cid' of an existing node
-  #          'v': INTEGER,   // Refers to 'id' of an existing node
-  #'v_record_id': INTEGER,   // Refers to 'record_id' of an existing node
-  #         'cv': ANYTHING,  // Refers to 'cid' of an existing node
+  #            'u': INTEGER,   // Refers to 'id' of an existing node
+  #  'u_record_id': INTEGER,   // Refers to 'record_id' of an existing node
+  #'u_branch_path': INTEGER,   // Refers to 'branch_path' of an existing node
+  #           'cu': ANYTHING   // Refers to 'cid' of an existing node
+  #            'v': INTEGER,   // Refers to 'id' of an existing node
+  #  'v_record_id': INTEGER,   // Refers to 'record_id' of an existing node
+  #'v_branch_path': INTEGER,   // Refers to 'branch_path' of an existing node
+  #           'cv': ANYTHING,  // Refers to 'cid' of an existing node
   #   }
   #
   # Currently each id is a NUMBER which is unique for a given project but this
@@ -139,17 +141,19 @@ class ProjectsController < ApplicationController
 
         @project.context do
           @nodes = Node.exclude(:type => 'Project').all
+          node_map = {}
+          @nodes.each do |node|
+            node_map[node.record_id] = node
+          end
 
           @nodes.each do |n|
             n.to_edge.each do |edge|
-              @edges << {
-                  id: edge.version,
-                  branch_path: edge.branch_path,
-                  created_at: edge.created_at,
-                  v_record_id: n.record_id,
-                  u_record_id: edge.to.record_id,
-                          v: n.version,
-                          u: edge.to.version }
+              # KLUDGE, associations don't update because objects are frozen
+              edge = edge.dup # Because its frozen
+              edge.instance_variable_set('@associations',
+                                         to: node_map[edge.from_record_id],
+                                         from: n)
+              @edges << edge.client_values
             end
           end
         end
@@ -159,7 +163,7 @@ class ProjectsController < ApplicationController
                                                        op: :add) }
         data += @edges.map { |h| { type: :edge,
                                    op: :add }.merge(h) }
-        
+
         render :json => data
       end
     end
@@ -240,11 +244,7 @@ class ProjectsController < ApplicationController
                 node = node.create(fields)
               end
             end
-            hash.merge(fields).merge('id' => node.version,
-                                     'branch_path' => node.branch_path,
-                                     'record_id' => node.record_id,
-                                     'created_at' => node.created_at)
-
+            hash.merge(node.client_values)
 
           when 'edge'
             raise "Change not supported on edge" if op == 'change'
@@ -265,12 +265,7 @@ class ProjectsController < ApplicationController
             end
 
             edge = from.send("#{op}_to", to, nil, created_at)
-            hash.merge('id' => edge.version,
-                       'branch_path' => edge.branch_path,
-                       'created_at' => edge.created_at,
-                       'v_record_id' => from.record_id,
-                       'u_record_id' => to.record_id,
-                       'u' => to.version, 'v' => from.version)
+            hash.merge(edge.client_values)
           else
             raise "Expected type to be Node or Edge"
           end
