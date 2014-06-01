@@ -151,25 +151,46 @@ module Sequel
                            prefix)
         end
 
-        opts[:adder] = proc do |node, branch = nil, created_at = nil, deleted = nil|
+        opts[:adder] = proc do |node, branch = nil, created_at = nil, delete = nil|
           ctx = current_context(branch, false)
 
           ctx.not_included!(self)
           ctx.not_included!(node) unless opts[:inter_branch]
 
-          h = if opts[:inter_branch]
-                { opts[:left_branch_id] => ctx.id,
-                  opts[:right_branch_id] => node.context.id }
-              else
-                { :branch_id => ctx.branch.id }
-              end
+          h_record_id = {
+              opts[:left_record_id] => record_id,
+              opts[:right_record_id] => node.record_id,
+          }
 
-          h.merge!(opts[:left_record_id] => record_id,
-                   opts[:left_branch_path] => branch_path,
-                   opts[:right_record_id] => node.record_id,
-                   opts[:right_branch_path] => node.branch_path,
-                   :created_at => created_at || self.class.dataset.current_datetime,
-                   :deleted => deleted ? true : false)
+          h_branch_path = {
+              opts[:left_branch_path] => branch_path,
+              opts[:right_branch_path] => node.branch_path,
+          }
+
+          # !!! Implement check with inter_branch
+          unless opts[:inter_branch]
+            ds = join_class.dataset(ctx, no_finalize: true).where(h_record_id)
+            h_branch_path.each do |col, val|
+              ds = ds.where(ds.last_branch_path_context.concat(
+                                Sequel.qualify(ds.versioned_table, col)) => val)
+            end
+            p = ds.order(Sequel.qualify(ds.versioned_table, :version).desc).first
+            exists = p && !p.deleted
+            if !exists != !delete
+              raise VersionedError, "Edge add doesn't change edge state"
+            end
+          end
+
+          h = h_record_id.merge(h_branch_path)
+          if opts[:inter_branch]
+            h.merge!( opts[:left_branch_id] => ctx.id,
+                      opts[:right_branch_id] => node.context.id )
+          else
+            h.merge!( :branch_id => ctx.branch.id )
+          end
+
+          h.merge!(:created_at => created_at || self.class.dataset.current_datetime,
+                   :deleted => delete ? true : false)
 
           join_class.create(h)
         end

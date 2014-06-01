@@ -45,35 +45,38 @@ module DatasetBranchContext
   def join_context(context_data, options = {})
     join_column = options[:join_column] || :branch_id
 
-    prior_table = opts[:last_joined_table] || opts[:from].first
+    versioned_table = opts[:last_joined_table] || opts[:from].first
 
     ds = join(context_data, { :branch_id => join_column }, options) do |j, lj|
       Sequel.expr(Sequel.qualify(j, :version) => nil) |
           (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
     end
-    ds.opts[:last_branch_path_context] =
-        Sequel.qualify(ds.opts[:last_joined_table], :branch_path).pg_array
-    ds.opts[:last_branch_path] =
-        ds.opts[:last_branch_path_context].concat(
-            Sequel.qualify(prior_table, :branch_path))
-    ds.opts[:last_record_id] = Sequel.qualify(prior_table, :record_id)
+    ds.opts[:versioned_table] = versioned_table
+    ds.opts[:last_record_id] = Sequel.qualify(versioned_table, :record_id)
     ds.opts[:order_columns] = (ds.opts[:order_columns] || []) +
         [Sequel.qualify(ds.opts[:last_joined_table], :depth),
-         Sequel.qualify(prior_table, :version).desc]
+         Sequel.qualify(versioned_table, :version).desc]
     ds
   end
 
-  def last_branch_path_context; @opts[:last_branch_path_context]; end
-  def last_branch_path; @opts[:last_branch_path]; end
-  def last_record_id; @opts[:last_record_id]; end
+  def versioned_table; @opts[:versioned_table]; end
+  def last_branch_path_context
+    Sequel.qualify(@opts[:last_joined_table], :branch_path).pg_array
+  end
+  def last_branch_path
+    last_branch_path_context.concat(
+        Sequel.qualify(versioned_table, :branch_path))
+  end
+  def last_record_id; @opts[:last_record_id] || :record_id; end
 
   # Pick latest versions and remove deleted records
   def finalize(opts = {})
+    return self if opts[:no_finalize]
     model_table_name = model.raw_dataset.first_source_table
     ds = select(*model.columns.map { |c|
                     Sequel.qualify(model_table_name, c) },
                 Sequel.function(:rank)
-                  .over(:partition => [last_record_id || :record_id,
+                  .over(:partition => [last_record_id,
                                        last_branch_path],
                         :order     => @opts[:order_columns] ||
                                         Sequel.qualify(model_table_name,
@@ -104,6 +107,8 @@ module DatasetBranchContext
     super.map { |r| setup_object(r) }
   end
 end
+
+class VersionedError < StandardError; end
 
 module Versioned
   extend ActiveSupport::Concern
@@ -278,11 +283,17 @@ module Versioned
       new(values, &block).save
     end
 
-    # Should delete just be a row tag or an whole new table as this wastes alot of space
-    # This approach simplifies and probably speeds up queries though
+    # Should preform delete check here instead of DB trigger because the context
+    # is needed to do this correctly.
     def delete(values = {})
-      # !!! Shouldn't be able to delete already deleted object
-      create(values.merge(deleted: true))
+      o = new(values.merge(deleted: true))
+      ds = self.class.dataset(o.context, no_finalize: true)
+      p = ds.where(ds.last_record_id => record_id,
+                   ds.last_branch_path => o.branch_path)
+             .order(Sequel.qualify(ds.versioned_table, :version).desc).first
+      raise VersionedError, "Delete without existing record" unless p
+      raise VersionedError, "Delete with existing deleted record" if p.deleted
+      o.save
     end
 
     private
