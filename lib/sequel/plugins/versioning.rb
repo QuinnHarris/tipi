@@ -425,13 +425,13 @@ module Sequel
       module ClassMethods
 
         def prev_version(context)
-          ds = dataset_from_context(Context.new(context.branch), include_all: true)
+          ds = dataset_from_context(Branch::Context.new(context.branch), include_all: true)
           ds = ds.where { |o| o.nodes__version < context.version } if context.version
           ds.max(Sequel.qualify(:nodes, :version))
         end
         def next_version(context)
           return nil unless context.version
-          dataset_from_context(Context.new(context.branch), include_all: true).where { |o| o.nodes__version > context.version }.min(Sequel.qualify(:nodes, :version))
+          dataset_from_context(Branch::Context.new(context.branch), include_all: true).where { |o| o.nodes__version > context.version }.min(Sequel.qualify(:nodes, :version))
         end
 
         # Dataset for latest version of rows within the provided branch (and predecessors)

@@ -55,12 +55,14 @@ class Step < Node
 
 end
 
+Branch
+
 # Categories can only be contained by other categories
 class Category < Node
   def self.root(version = nil)
     # Must duplicate for each call so the BranchContext isn't cached
 #    return @@root.dup if class_variable_defined?('@@root')
-    @@root = dataset(Context.new(ViewBranch.public, version)).where(version: 1).first!
+    @@root = dataset(Sequel::Plugins::Branch::Context.new(ViewBranch.public, version)).where(version: 1).first!
   end
 
   alias_method :children, :to

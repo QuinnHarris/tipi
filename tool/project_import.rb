@@ -56,6 +56,8 @@ require ::File.expand_path('../../config/environment',  __FILE__)
 
 data = ActiveSupport::JSON.decode(json_data)
 
+Node
+Branch
 ViewBranch.public.context do
   category = Category.root.get_path(category_path)
 

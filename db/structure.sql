@@ -26,21 +26,6 @@ COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 SET search_path = public, pg_catalog;
 
 --
--- Name: array_cmp_tail(integer[], integer[]); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION array_cmp_tail(base integer[], cmp integer[]) RETURNS boolean
-    LANGUAGE plpgsql
-    AS $$
-      DECLARE
-        len INTEGER := COALESCE(array_length(base, 1), 0);
-      BEGIN
-        RETURN base[len - COALESCE(array_length(cmp, 1), 0) + 1:len] = cmp;
-      END;
-      $$;
-
-
---
 -- Name: cycle_test(); Type: FUNCTION; Schema: public; Owner: -
 --
 
