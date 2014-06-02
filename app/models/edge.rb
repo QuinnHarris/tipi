@@ -1,6 +1,6 @@
 class Edge < Sequel::Model
   plugin :versioning
-  include Versioned
+
 
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|

@@ -1,3 +1,6 @@
+Branch
+Node
+
 class ProjectsController < ApplicationController
   def index
 
@@ -121,8 +124,6 @@ class ProjectsController < ApplicationController
   #           'cv': ANYTHING,  // Refers to 'cid' of an existing node
   #   }
   #
-  # Currently each id is a NUMBER which is unique for a given project but this
-  # is likely to change to an array of NUMBERs that is unique to the entire db.
   # The current id is the version number so the order of ids represents when
   # that instance of the object was created.
   #

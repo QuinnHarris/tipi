@@ -34,7 +34,7 @@ describe Branch do
     expect(node_a_delete.version).to be > node_a.version
     expect(Node.dataset(branch).all).to eq([])
     
-    expect(Node.dataset(BranchContext.new(branch, node_a.version)).all).
+    expect(Node.dataset(Sequel::Plugins::Branch::Context.new(branch, node_a.version)).all).
       to eq([node_a])
   end
 
@@ -64,7 +64,7 @@ describe Branch do
     br_c = br_b.fork(name: 'Branch C', version_lock: true) do
       expect(Node.all).to match_array([node_a, node_b])
       node_a_del = node_a.delete
-      expect(node_a_del.context).to eq(BranchContext.current)
+      expect(node_a_del.context).to eq(Sequel::Plugins::Branch::Context.current)
       expect(Node.all).to match_array([node_b])
 
       expect { br_a.context { } }.to raise_error(BranchContextError, /^Branch found.+but/)
@@ -216,7 +216,7 @@ describe Branch do
 
       # Modify
       expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
-      expect(node_a_A.context).to eq(BranchContext.current)
+      expect(node_a_A.context).to eq(Sequel::Plugins::Branch::Context.current)
       node_a_A_new = node_a_A.create(name: 'Node A v2')
 
       node_a_list = Node.where(record_id: node_a.record_id).all
