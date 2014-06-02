@@ -27,7 +27,7 @@ describe ProjectsController do
     
     # Create Node
     data = (1..2).map do
-      node_attr = attributes_for(:node_ajax)
+      node_attr = attributes_for(:task_ajax)
       #    expect(Node).to receive(:create).with(name: node_1_attr[:name]).once
 
       resp_data = write_request(project.version, node_attr)
@@ -43,7 +43,7 @@ describe ProjectsController do
     node_1_id, node_2_id = data.map { |e| e[:id] }
 
     # Create Edge
-    edge_attr = attributes_for(:edge_ajax, u: node_1_id, v: node_2_id)
+    edge_attr = attributes_for(:task_edge_ajax, u: node_1_id, v: node_2_id)
     resp_data = write_request(project.version, edge_attr)
     expect(resp_data).to have(1).items
 
@@ -78,8 +78,8 @@ describe ProjectsController do
 
     # Add Node and Edge in one request
     source_id = 1
-    node_attr = attributes_for(:node_ajax, cid: source_id)
-    edge_attr = attributes_for(:edge_ajax, u: node_1_id, cv: source_id)
+    node_attr = attributes_for(:task_ajax, cid: source_id)
+    edge_attr = attributes_for(:task_edge_ajax, u: node_1_id, cv: source_id)
     request = [node_attr, edge_attr]
     resp_data = write_request(project.version, request)
     expect(resp_data).to have(2).items
@@ -94,7 +94,7 @@ describe ProjectsController do
     expect(resp_data.first[:created_at]).to eq(resp_data.last[:created_at])
 
     # Change a nodee
-    node_attr = attributes_for(:node_ajax, op: 'change', id: node_3_data[:id])
+    node_attr = attributes_for(:task_ajax, op: 'change', id: node_3_data[:id])
     resp_data = write_request(project.version, node_attr)
     expect(resp_data).to have(1).items
     node_data = resp_data.first
@@ -103,7 +103,7 @@ describe ProjectsController do
       .to eq(node_attr.except(:id).merge(node_3_data.slice(:record_id, :branch_path, :branch_id)))
 
     # Check post_doc interface
-    node_attr = attributes_for(:node_ajax)
+    node_attr = attributes_for(:task_ajax)
     post :post_doc, { id: project.version, version: node_data[:id], body: node_attr[:doc] }
 
   end

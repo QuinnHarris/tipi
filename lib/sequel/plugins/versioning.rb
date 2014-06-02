@@ -3,7 +3,6 @@ class VersionedError < StandardError; end
 module Sequel
   module Plugins
     module Versioning
-      Branch
       module DatasetBranchContext
         attr_reader :context
         private
@@ -423,15 +422,17 @@ module Sequel
       end
 
       module ClassMethods
-
+        # This should be removed soon
         def prev_version(context)
           ds = dataset_from_context(Branch::Context.new(context.branch), include_all: true)
-          ds = ds.where { |o| o.nodes__version < context.version } if context.version
-          ds.max(Sequel.qualify(:nodes, :version))
+          ds = ds.where(Sequel.qualify(table_name, :version) < context.version) if context.version
+          ds.max(Sequel.qualify(table_name, :version))
         end
         def next_version(context)
           return nil unless context.version
-          dataset_from_context(Branch::Context.new(context.branch), include_all: true).where { |o| o.nodes__version > context.version }.min(Sequel.qualify(:nodes, :version))
+          dataset_from_context(Branch::Context.new(context.branch), include_all: true)
+            .where(Sequel.qualify(table_name, :version) < context.version)
+            .min(Sequel.qualify(table_name, :version))
         end
 
         # Dataset for latest version of rows within the provided branch (and predecessors)
@@ -543,7 +544,7 @@ module Sequel
               ds  = dataset_to_edge(dataset, context_data, r)
 
               # Join final nodes
-              ds = ds.join(:nodes,
+              ds = ds.join(dataset.first_source_table,
                            :record_id => Sequel.qualify(r[:join_table],
                                                         r[:right_record_id]) )
 

@@ -1,8 +1,8 @@
-class Node < Sequel::Model
+class Task < Sequel::Model
   plugin :single_table_inheritance, :type
 
   plugin :versioning
-  [[Edge, false], [EdgeInter, true]].each do |join_class, inter_branch|
+  [[TaskEdge, false], [TaskEdger, true]].each do |join_class, inter_branch|
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
     relation_name = :"#{aspect}#{inter_branch ? '_inter' : ''}"
@@ -24,7 +24,7 @@ class Node < Sequel::Model
   end
 end
 
-class Project < Node
+class Project < Task
   def clone(opts = {})
     raise "Expected view context" unless context.branch.is_a?(ViewBranch)
     raise "Expected one from: #{from.inspect}" unless from.length == 1
@@ -51,14 +51,14 @@ class Project < Node
   end
 end
 
-class Step < Node
+class Step < Task
 
 end
 
 Branch
 
 # Categories can only be contained by other categories
-class Category < Node
+class Category < Task
   def self.root(version = nil)
     # Must duplicate for each call so the BranchContext isn't cached
 #    return @@root.dup if class_variable_defined?('@@root')

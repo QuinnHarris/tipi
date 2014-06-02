@@ -8,5 +8,5 @@
 
 Branch
 public_view = ViewBranch.create(name: 'Public View')
-Node
+Task
 root_category = Category.create(name: 'Root Category', branch: public_view)

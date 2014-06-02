@@ -44,8 +44,6 @@ module Sequel
 
         # has_many :template_instances
 
-
-
         # Create new successor branch from current branch with option context block
         def fork(options = {}, &block)
           version = options.delete(:version_lock)
@@ -73,10 +71,6 @@ module Sequel
             o
           end
         end
-
-        # one_to_many :decendants, read_only: true,
-        #   dataset: proc do
-        #   end
 
         # Return dataset with this and all predecessor branch ids and maximum version number for that branch
         def context_dataset(version = nil)

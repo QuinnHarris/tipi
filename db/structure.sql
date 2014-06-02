@@ -66,10 +66,10 @@ CREATE FUNCTION cycle_test() RETURNS trigger
 
 
 --
--- Name: nodes_trigger(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: tasks_trigger(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION nodes_trigger() RETURNS trigger
+CREATE FUNCTION tasks_trigger() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
       BEGIN
@@ -91,8 +91,8 @@ SET default_with_oids = false;
 
 CREATE TABLE actions (
     instance_id integer NOT NULL,
-    node_version integer NOT NULL,
-    node_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    task_version integer NOT NULL,
+    task_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     state text
 );
 
@@ -144,52 +144,6 @@ ALTER SEQUENCE branches_id_seq OWNED BY branches.id;
 
 
 --
--- Name: version_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE version_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: edge_inters; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE edge_inters (
-    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
-    created_at timestamp without time zone NOT NULL,
-    from_record_id integer NOT NULL,
-    from_branch_id integer NOT NULL,
-    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    to_record_id integer NOT NULL,
-    to_branch_id integer NOT NULL,
-    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    deleted boolean DEFAULT false NOT NULL
-);
-
-
---
--- Name: edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE edges (
-    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
-    branch_id integer NOT NULL,
-    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    created_at timestamp without time zone NOT NULL,
-    from_record_id integer NOT NULL,
-    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    to_record_id integer NOT NULL,
-    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    deleted boolean DEFAULT false NOT NULL
-);
-
-
---
 -- Name: instance_relations; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -236,40 +190,15 @@ ALTER SEQUENCE instances_id_seq OWNED BY instances.id;
 
 
 --
--- Name: nodes; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: version_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE TABLE nodes (
-    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
-    branch_id integer NOT NULL,
-    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    record_id integer NOT NULL,
-    created_at timestamp without time zone NOT NULL,
-    type text NOT NULL,
-    name text NOT NULL,
-    doc text,
-    tsv tsvector,
-    deleted boolean DEFAULT false NOT NULL
-);
-
-
---
--- Name: nodes_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE nodes_record_id_seq
+CREATE SEQUENCE version_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
-
-
---
--- Name: nodes_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE nodes_record_id_seq OWNED BY nodes.record_id;
 
 
 --
@@ -333,6 +262,77 @@ ALTER SEQUENCE resources_record_id_seq OWNED BY resources.record_id;
 CREATE TABLE schema_migrations (
     filename text NOT NULL
 );
+
+
+--
+-- Name: task_edgers; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE task_edgers (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    from_record_id integer NOT NULL,
+    from_branch_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_record_id integer NOT NULL,
+    to_branch_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: task_edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE task_edges (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    from_record_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_record_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: tasks; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE tasks (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    record_id integer NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    type text NOT NULL,
+    name text NOT NULL,
+    doc text,
+    tsv tsvector,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: tasks_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE tasks_record_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tasks_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE tasks_record_id_seq OWNED BY tasks.record_id;
 
 
 --
@@ -404,14 +404,14 @@ ALTER TABLE ONLY instances ALTER COLUMN id SET DEFAULT nextval('instances_id_seq
 -- Name: record_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY nodes ALTER COLUMN record_id SET DEFAULT nextval('nodes_record_id_seq'::regclass);
+ALTER TABLE ONLY resources ALTER COLUMN record_id SET DEFAULT nextval('resources_record_id_seq'::regclass);
 
 
 --
 -- Name: record_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY resources ALTER COLUMN record_id SET DEFAULT nextval('resources_record_id_seq'::regclass);
+ALTER TABLE ONLY tasks ALTER COLUMN record_id SET DEFAULT nextval('tasks_record_id_seq'::regclass);
 
 
 --
@@ -426,7 +426,7 @@ ALTER TABLE ONLY users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regcl
 --
 
 ALTER TABLE ONLY actions
-    ADD CONSTRAINT actions_pkey PRIMARY KEY (instance_id, node_version, node_branch_path);
+    ADD CONSTRAINT actions_pkey PRIMARY KEY (instance_id, task_version, task_branch_path);
 
 
 --
@@ -446,22 +446,6 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: edge_inters_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY edge_inters
-    ADD CONSTRAINT edge_inters_pkey PRIMARY KEY (version);
-
-
---
--- Name: edges_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_pkey PRIMARY KEY (version);
-
-
---
 -- Name: instance_relations_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -475,14 +459,6 @@ ALTER TABLE ONLY instance_relations
 
 ALTER TABLE ONLY instances
     ADD CONSTRAINT instances_pkey PRIMARY KEY (id);
-
-
---
--- Name: nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY nodes
-    ADD CONSTRAINT nodes_pkey PRIMARY KEY (version);
 
 
 --
@@ -510,6 +486,30 @@ ALTER TABLE ONLY schema_migrations
 
 
 --
+-- Name: task_edgers_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY task_edgers
+    ADD CONSTRAINT task_edgers_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: task_edges_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY task_edges
+    ADD CONSTRAINT task_edges_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY tasks
+    ADD CONSTRAINT tasks_pkey PRIMARY KEY (version);
+
+
+--
 -- Name: users_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -518,52 +518,10 @@ ALTER TABLE ONLY users
 
 
 --
--- Name: edge_inters_from_record_id_from_branch_path_from_branch_id_inde; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX edge_inters_from_record_id_from_branch_path_from_branch_id_inde ON edge_inters USING btree (from_record_id, from_branch_path, from_branch_id);
-
-
---
--- Name: edge_inters_to_record_id_to_branch_path_to_branch_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX edge_inters_to_record_id_to_branch_path_to_branch_id_index ON edge_inters USING btree (to_record_id, to_branch_path, to_branch_id);
-
-
---
--- Name: edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX edges_from_record_id_from_branch_path_index ON edges USING btree (from_record_id, from_branch_path);
-
-
---
--- Name: edges_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX edges_to_record_id_to_branch_path_index ON edges USING btree (to_record_id, to_branch_path);
-
-
---
 -- Name: instances_resource_version_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE INDEX instances_resource_version_resource_branch_path_index ON instances USING btree (resource_version, resource_branch_path);
-
-
---
--- Name: nodes_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX nodes_record_id_index ON nodes USING btree (record_id);
-
-
---
--- Name: nodes_tsv_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX nodes_tsv_index ON nodes USING btree (tsv);
 
 
 --
@@ -585,6 +543,48 @@ CREATE INDEX resource_edges_to_record_id_to_branch_path_index ON resource_edges 
 --
 
 CREATE INDEX resources_record_id_index ON resources USING btree (record_id);
+
+
+--
+-- Name: task_edgers_from_record_id_from_branch_path_from_branch_id_inde; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX task_edgers_from_record_id_from_branch_path_from_branch_id_inde ON task_edgers USING btree (from_record_id, from_branch_path, from_branch_id);
+
+
+--
+-- Name: task_edgers_to_record_id_to_branch_path_to_branch_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX task_edgers_to_record_id_to_branch_path_to_branch_id_index ON task_edgers USING btree (to_record_id, to_branch_path, to_branch_id);
+
+
+--
+-- Name: task_edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX task_edges_from_record_id_from_branch_path_index ON task_edges USING btree (from_record_id, from_branch_path);
+
+
+--
+-- Name: task_edges_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX task_edges_to_record_id_to_branch_path_index ON task_edges USING btree (to_record_id, to_branch_path);
+
+
+--
+-- Name: tasks_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX tasks_record_id_index ON tasks USING btree (record_id);
+
+
+--
+-- Name: tasks_tsv_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX tasks_tsv_index ON tasks USING btree (tsv);
 
 
 --
@@ -623,10 +623,10 @@ CREATE CONSTRAINT TRIGGER cycle_test AFTER INSERT OR UPDATE ON branch_relations 
 
 
 --
--- Name: nodes_tsvector_update; Type: TRIGGER; Schema: public; Owner: -
+-- Name: tasks_tsvector_update; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER nodes_tsvector_update BEFORE INSERT ON nodes FOR EACH ROW EXECUTE PROCEDURE nodes_trigger();
+CREATE TRIGGER tasks_tsvector_update BEFORE INSERT ON tasks FOR EACH ROW EXECUTE PROCEDURE tasks_trigger();
 
 
 --
@@ -638,11 +638,11 @@ ALTER TABLE ONLY actions
 
 
 --
--- Name: actions_node_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: actions_task_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY actions
-    ADD CONSTRAINT actions_node_version_fkey FOREIGN KEY (node_version) REFERENCES nodes(version);
+    ADD CONSTRAINT actions_task_version_fkey FOREIGN KEY (task_version) REFERENCES tasks(version);
 
 
 --
@@ -659,30 +659,6 @@ ALTER TABLE ONLY branch_relations
 
 ALTER TABLE ONLY branch_relations
     ADD CONSTRAINT branch_relations_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
-
-
---
--- Name: edge_inters_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edge_inters
-    ADD CONSTRAINT edge_inters_from_branch_id_fkey FOREIGN KEY (from_branch_id) REFERENCES branches(id);
-
-
---
--- Name: edge_inters_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edge_inters
-    ADD CONSTRAINT edge_inters_to_branch_id_fkey FOREIGN KEY (to_branch_id) REFERENCES branches(id);
-
-
---
--- Name: edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY edges
-    ADD CONSTRAINT edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
 
 
 --
@@ -710,14 +686,6 @@ ALTER TABLE ONLY instances
 
 
 --
--- Name: nodes_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY nodes
-    ADD CONSTRAINT nodes_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
-
-
---
 -- Name: resource_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -731,6 +699,38 @@ ALTER TABLE ONLY resource_edges
 
 ALTER TABLE ONLY resources
     ADD CONSTRAINT resources_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: task_edgers_from_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY task_edgers
+    ADD CONSTRAINT task_edgers_from_branch_id_fkey FOREIGN KEY (from_branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: task_edgers_to_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY task_edgers
+    ADD CONSTRAINT task_edgers_to_branch_id_fkey FOREIGN KEY (to_branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: task_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY task_edges
+    ADD CONSTRAINT task_edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: tasks_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY tasks
+    ADD CONSTRAINT tasks_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
 
 
 --

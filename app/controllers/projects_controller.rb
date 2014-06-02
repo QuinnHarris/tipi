@@ -1,5 +1,5 @@
 Branch
-Node
+Task
 
 class ProjectsController < ApplicationController
   def index
@@ -67,9 +67,9 @@ class ProjectsController < ApplicationController
   # For JSON response returns just like show without type or op
   def search
     if params[:local]
-      ds = Node.dataset(@project.context)
+      ds = Task.dataset(@project.context)
     else
-      ds = Node.dataset.finalize
+      ds = Task.dataset.finalize
     end
 
     @results =
@@ -141,7 +141,7 @@ class ProjectsController < ApplicationController
         @edges = []
 
         @project.context do
-          @nodes = Node.exclude(:type => 'Project').all
+          @nodes = Task.exclude(:type => 'Project').all
           node_map = {}
           @nodes.each do |node|
             node_map[node.record_id] = node
@@ -173,7 +173,7 @@ class ProjectsController < ApplicationController
   def post_doc
     node = nil
     @project.context do
-      node = Node.where(version: Integer(params[:version])).first
+      node = Task.where(version: Integer(params[:version])).first
       node = node.create(doc: params[:body])
     end
 
@@ -204,7 +204,7 @@ class ProjectsController < ApplicationController
     response = []
     @project.context do
       response = data.map do |list|
-        created_at = Node.dataset.current_datetime
+        created_at = Task.dataset.current_datetime
         [list].flatten.map do |hash|
           keys = %w(type op)
           type, op = keys.map do |k|
@@ -231,14 +231,14 @@ class ProjectsController < ApplicationController
 
             if op == 'add'
               raise "Name required" unless fields['name']
-              node = Node.create(fields)
+              node = Task.create(fields)
               session_objects[hash['cid']] = node if hash['cid']
             else
               id = hash['id']
               raise "Expected id" unless id
               keys << 'id'
 
-              node = Node.where(version: Integer(id)).first
+              node = Task.where(version: Integer(id)).first
               if op == 'remove'
                 node.delete(fields)
               else
@@ -251,7 +251,7 @@ class ProjectsController < ApplicationController
             raise "Change not supported on edge" if op == 'change'
             to, from = %w(u v).map do |k|
               if value = hash[k]
-                n = Node.where(version: Integer(value)).first
+                n = Task.where(version: Integer(value)).first
                 raise "Didn't find node #{value}" unless n
                 keys << k
               elsif cid = hash["c#{k}"]

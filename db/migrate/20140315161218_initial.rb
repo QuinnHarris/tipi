@@ -144,7 +144,7 @@ Sequel.migration do
         FOR EACH ROW EXECUTE PROCEDURE cycle_test();
     )
 
-    create_version_table :nodes do
+    create_version_table :tasks do
       String        :type, null: false
 
       String        :name, null: false
@@ -155,7 +155,7 @@ Sequel.migration do
     end
     # Update tsv on INSERT, but not UPDATE
     run %(
-      CREATE FUNCTION nodes_trigger() RETURNS TRIGGER AS $$
+      CREATE FUNCTION tasks_trigger() RETURNS TRIGGER AS $$
       BEGIN
         NEW.tsv :=
           setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') ||
@@ -164,14 +164,13 @@ Sequel.migration do
       END
       $$ LANGUAGE plpgsql;
 
-      CREATE TRIGGER nodes_tsvector_update
-        BEFORE INSERT ON nodes
-        FOR EACH ROW EXECUTE PROCEDURE nodes_trigger();
+      CREATE TRIGGER tasks_tsvector_update
+        BEFORE INSERT ON tasks
+        FOR EACH ROW EXECUTE PROCEDURE tasks_trigger();
     )
 
-    create_many_to_many_version_table(:edges)
-
-    create_many_to_many_version_table(:edge_inters, inter_branch: true)
+    create_many_to_many_version_table(:task_edges)
+    create_many_to_many_version_table(:task_edgers, inter_branch: true)
 
 
     create_version_table :resources do
@@ -209,9 +208,9 @@ Sequel.migration do
 
     create_table :actions do
       foreign_key :instance_id, :instances
-      foreign_key :node_version, :nodes
-      column      :node_branch_path, 'integer[]', null: false, default: '{}'
-      primary_key [:instance_id, :node_version, :node_branch_path]
+      foreign_key :task_version, :tasks
+      column      :task_branch_path, 'integer[]', null: false, default: '{}'
+      primary_key [:instance_id, :task_version, :task_branch_path]
 
       String      :state
     end
