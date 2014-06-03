@@ -6,5 +6,6 @@ class User < Sequel::Model
          :recoverable, :rememberable, :trackable, :validatable, :confirmable, :lockable #, :omniauthable
 
   # Main View for user
-  one_to_one :view
+  plugin :version_associations
+  ver_many_to_one :resource
 end

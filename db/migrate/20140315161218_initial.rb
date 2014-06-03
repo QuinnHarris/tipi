@@ -1,4 +1,22 @@
 module Sequel
+  module Schema
+    class CreateTableGenerator
+      def ver_foreign_key(prefix, opts = {})
+        rows = []
+        table_name = opts[:table_name] || prefix.to_s.pluralize.to_sym
+        if opts[:version]
+          Bignum :"#{prefix}_version".tap { |s| rows << s }, null: false
+          foreign_key rows.dup, table_name
+        else
+          Integer :"#{prefix}_record_id".tap { |s| rows << s }, null: false
+        end
+
+        column :"#{prefix}_branch_path".tap { |s| rows << s }, 'integer[]', null: false, default: '{}'
+        index rows
+      end
+    end
+  end
+
   class Database
     # Ideally this would be submitted to the Sequel project
     def create_sequence_sql(name, options)
@@ -16,6 +34,32 @@ module Sequel
 
     def create_sequence(name, options=OPTS)
       run(create_sequence_sql(name, options))
+    end
+
+    def full_text_search(table_name, column_map)
+      add_column  table_name, :tsv, 'tsvector'
+      add_index   table_name, :tsv, :index_type => :gin
+
+      sql = %(
+          CREATE FUNCTION #{table_name}_tsearch_trigger() RETURNS TRIGGER AS $$
+          BEGIN
+            NEW.tsv := )
+
+      sql += column_map.map do |name, weight|
+        "setweight(to_tsvector('pg_catalog.english', coalesce(NEW.#{name},'')), '#{weight}')"
+      end.join(' || ') + ';'
+
+      sql += %(
+            RETURN NEW;
+          END
+          $$ LANGUAGE plpgsql;
+
+          CREATE TRIGGER #{table_name}_tsearch
+            BEFORE INSERT OR UPDATE ON #{table_name}
+            FOR EACH ROW EXECUTE PROCEDURE #{table_name}_tsearch_trigger();
+        )
+
+      run sql
     end
 
     def create_version_table(table_name, options = {}, &block)
@@ -144,51 +188,38 @@ Sequel.migration do
         FOR EACH ROW EXECUTE PROCEDURE cycle_test();
     )
 
-    create_version_table :tasks do
-      String        :type, null: false
-
-      String        :name, null: false
-      String        :doc,  text: true
-      column        :tsv, 'tsvector'
-      index         :tsv, :index_type => :gin
-      #full_text_index [:name, :doc], :language => 'english'
-    end
-    # Update tsv on INSERT, but not UPDATE
-    run %(
-      CREATE FUNCTION tasks_trigger() RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.tsv :=
-          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') ||
-          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
-        RETURN NEW;
-      END
-      $$ LANGUAGE plpgsql;
-
-      CREATE TRIGGER tasks_tsvector_update
-        BEFORE INSERT ON tasks
-        FOR EACH ROW EXECUTE PROCEDURE tasks_trigger();
-    )
-
-    create_many_to_many_version_table(:task_edges)
-    create_many_to_many_version_table(:task_edgers, inter_branch: true)
-
-
     create_version_table :resources do
       String        :type, null: false
 
       String        :name, null: false
+      String        :doc,  text: true
     end
+    full_text_search :resources, { :name => 'A', :doc => 'B' }
 
     create_many_to_many_version_table(:resource_edges) do
       String        :type, null: false
       String        :data
     end
 
+    create_version_table :tasks do
+      ver_foreign_key :resource
+
+      String        :type, null: false
+
+      String        :name, null: false
+      String        :doc,  text: true
+    end
+    full_text_search :tasks, { :name => 'A', :doc => 'B' }
+
+    create_many_to_many_version_table(:task_edges)
+    create_many_to_many_version_table(:task_edgers, inter_branch: true)
+
+
     create_table :instances do
       primary_key :id
-      foreign_key :resource_version, :resources
-      column      :resource_branch_path, 'integer[]', null: false, default: '{}'
-      index       [:resource_version, :resource_branch_path]
+
+      ver_foreign_key :resource, version: true
+      foreign_key :branch_id, :branches
 
       String      :state
       Integer     :count, null: false, default: 1
@@ -198,7 +229,7 @@ Sequel.migration do
       DateTime    :updated_at, null: false
     end
 
-    create_table :instance_relations do
+    create_table :instance_edges do
       foreign_key   :predecessor_id, :branches
       foreign_key   :successor_id, :branches
       primary_key   [:successor_id, :predecessor_id]
@@ -208,8 +239,7 @@ Sequel.migration do
 
     create_table :actions do
       foreign_key :instance_id, :instances
-      foreign_key :task_version, :tasks
-      column      :task_branch_path, 'integer[]', null: false, default: '{}'
+      ver_foreign_key :task, version: true
       primary_key [:instance_id, :task_version, :task_branch_path]
 
       String      :state
@@ -217,7 +247,7 @@ Sequel.migration do
 
     create_table :users do
       primary_key :id
-      foreign_key :branch_id, :branches
+      ver_foreign_key :resource
 
       # Devise
       ## Database authenticatable

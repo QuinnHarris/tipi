@@ -1,11 +1,9 @@
 class TaskEdge < Sequel::Model
-  plugin :versioning
-
+  plugin :versioned
 
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
-    ver_many_to_one aspect, :class => Task, inter_branch: false,
-                    key: opposite
+    ver_many_to_one aspect, :class => Task, :key => opposite
   end
 
   def client_values
@@ -25,4 +23,10 @@ class TaskEdge < Sequel::Model
 end
 
 class TaskEdger < Sequel::Model
+#  plugin :versioned
+
+#  aspects = [:from, :to]
+#  aspects.zip(aspects.reverse).each do |aspect, opposite|
+#    ver_many_to_one aspect, :class => Task, key: opposite, :inter_branch => true
+#  end
 end

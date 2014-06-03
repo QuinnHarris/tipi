@@ -1,19 +1,26 @@
 class Task < Sequel::Model
   plugin :single_table_inheritance, :type
+  plugin :versioned
 
-  plugin :versioning
+  ver_many_to_one :resource
+
+  # Probably need association that can find instances of this and all older
+  # versions of this resource.
+  one_to_many :actions, key: [:task_version, :task_branch_path],
+              primary_key: [:version, :branch_path]
+
   [[TaskEdge, false], [TaskEdger, true]].each do |join_class, inter_branch|
-  aspects = [:from, :to]
-  aspects.zip(aspects.reverse).each do |aspect, opposite|
-    relation_name = :"#{aspect}#{inter_branch ? '_inter' : ''}"
-    ver_many_to_many relation_name, key: aspect,
-                     join_class: join_class, :class => self,
-                     reciprocal: opposite, inter_branch: inter_branch
+    aspects = [:from, :to]
+    aspects.zip(aspects.reverse).each do |aspect, opposite|
+      relation_name = :"#{aspect}#{inter_branch ? '_inter' : ''}"
+      ver_many_to_many relation_name, key: aspect,
+                       join_class: join_class, :class => self,
+                       reciprocal: opposite, inter_branch: inter_branch
 
-    ver_one_to_many :"#{relation_name}_edge", key: aspect, reciprocal: opposite,
-                    :class => join_class, target_prefix: opposite,
-                    inter_branch: inter_branch, read_only: true
-  end
+      ver_one_to_many :"#{relation_name}_edge", key: aspect, reciprocal: opposite,
+                      :class => join_class, target_prefix: opposite,
+                      inter_branch: inter_branch, read_only: true
+    end
   end
 
   def client_values
@@ -63,6 +70,19 @@ class Category < Task
     # Must duplicate for each call so the BranchContext isn't cached
 #    return @@root.dup if class_variable_defined?('@@root')
     @@root = dataset(Sequel::Plugins::Branch::Context.new(ViewBranch.public, version)).where(version: 1).first!
+  end
+
+  # This should be removed soon
+  def prev_version(context)
+    ds = dataset_from_context(Branch::Context.new(context.branch), include_all: true)
+    ds = ds.where(Sequel.qualify(table_name, :version) < context.version) if context.version
+    ds.max(Sequel.qualify(table_name, :version))
+  end
+  def next_version(context)
+    return nil unless context.version
+    dataset_from_context(Branch::Context.new(context.branch), include_all: true)
+    .where(Sequel.qualify(table_name, :version) < context.version)
+    .min(Sequel.qualify(table_name, :version))
   end
 
   alias_method :children, :to

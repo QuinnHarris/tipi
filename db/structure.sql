@@ -66,19 +66,31 @@ CREATE FUNCTION cycle_test() RETURNS trigger
 
 
 --
--- Name: tasks_trigger(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: resources_tsearch_trigger(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION tasks_trigger() RETURNS trigger
+CREATE FUNCTION resources_tsearch_trigger() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-      BEGIN
-        NEW.tsv :=
-          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') ||
-          setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
-        RETURN NEW;
-      END
-      $$;
+          BEGIN
+            NEW.tsv := setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') || setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
+            RETURN NEW;
+          END
+          $$;
+
+
+--
+-- Name: tasks_tsearch_trigger(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION tasks_tsearch_trigger() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+          BEGIN
+            NEW.tsv := setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') || setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
+            RETURN NEW;
+          END
+          $$;
 
 
 SET default_tablespace = '';
@@ -91,7 +103,7 @@ SET default_with_oids = false;
 
 CREATE TABLE actions (
     instance_id integer NOT NULL,
-    task_version integer NOT NULL,
+    task_version bigint NOT NULL,
     task_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     state text
 );
@@ -144,13 +156,13 @@ ALTER SEQUENCE branches_id_seq OWNED BY branches.id;
 
 
 --
--- Name: instance_relations; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: instance_edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE TABLE instance_relations (
+CREATE TABLE instance_edges (
     predecessor_id integer NOT NULL,
     successor_id integer NOT NULL,
-    CONSTRAINT instance_relations_check CHECK (true)
+    CONSTRAINT instance_edges_check CHECK (true)
 );
 
 
@@ -160,8 +172,9 @@ CREATE TABLE instance_relations (
 
 CREATE TABLE instances (
     id integer NOT NULL,
-    resource_version integer,
+    resource_version bigint NOT NULL,
     resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    branch_id integer,
     state text,
     count integer DEFAULT 1 NOT NULL,
     data text,
@@ -232,7 +245,9 @@ CREATE TABLE resources (
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
     name text NOT NULL,
-    deleted boolean DEFAULT false NOT NULL
+    doc text,
+    deleted boolean DEFAULT false NOT NULL,
+    tsv tsvector
 );
 
 
@@ -308,11 +323,13 @@ CREATE TABLE tasks (
     branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     record_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
+    resource_record_id integer NOT NULL,
+    resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     type text NOT NULL,
     name text NOT NULL,
     doc text,
-    tsv tsvector,
-    deleted boolean DEFAULT false NOT NULL
+    deleted boolean DEFAULT false NOT NULL,
+    tsv tsvector
 );
 
 
@@ -341,7 +358,8 @@ ALTER SEQUENCE tasks_record_id_seq OWNED BY tasks.record_id;
 
 CREATE TABLE users (
     id integer NOT NULL,
-    branch_id integer,
+    resource_record_id integer NOT NULL,
+    resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     email text DEFAULT ''::text NOT NULL,
     encrypted_password text DEFAULT ''::text NOT NULL,
     reset_password_token text,
@@ -446,11 +464,11 @@ ALTER TABLE ONLY branches
 
 
 --
--- Name: instance_relations_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: instance_edges_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
-ALTER TABLE ONLY instance_relations
-    ADD CONSTRAINT instance_relations_pkey PRIMARY KEY (successor_id, predecessor_id);
+ALTER TABLE ONLY instance_edges
+    ADD CONSTRAINT instance_edges_pkey PRIMARY KEY (successor_id, predecessor_id);
 
 
 --
@@ -518,6 +536,13 @@ ALTER TABLE ONLY users
 
 
 --
+-- Name: actions_task_version_task_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX actions_task_version_task_branch_path_index ON actions USING btree (task_version, task_branch_path);
+
+
+--
 -- Name: instances_resource_version_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -543,6 +568,13 @@ CREATE INDEX resource_edges_to_record_id_to_branch_path_index ON resource_edges 
 --
 
 CREATE INDEX resources_record_id_index ON resources USING btree (record_id);
+
+
+--
+-- Name: resources_tsv_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX resources_tsv_index ON resources USING btree (tsv);
 
 
 --
@@ -581,6 +613,13 @@ CREATE INDEX tasks_record_id_index ON tasks USING btree (record_id);
 
 
 --
+-- Name: tasks_resource_record_id_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX tasks_resource_record_id_resource_branch_path_index ON tasks USING btree (resource_record_id, resource_branch_path);
+
+
+--
 -- Name: tasks_tsv_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -609,6 +648,13 @@ CREATE UNIQUE INDEX users_reset_password_token_index ON users USING btree (reset
 
 
 --
+-- Name: users_resource_record_id_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX users_resource_record_id_resource_branch_path_index ON users USING btree (resource_record_id, resource_branch_path);
+
+
+--
 -- Name: users_unlock_token_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -623,10 +669,17 @@ CREATE CONSTRAINT TRIGGER cycle_test AFTER INSERT OR UPDATE ON branch_relations 
 
 
 --
--- Name: tasks_tsvector_update; Type: TRIGGER; Schema: public; Owner: -
+-- Name: resources_tsearch; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER tasks_tsvector_update BEFORE INSERT ON tasks FOR EACH ROW EXECUTE PROCEDURE tasks_trigger();
+CREATE TRIGGER resources_tsearch BEFORE INSERT OR UPDATE ON resources FOR EACH ROW EXECUTE PROCEDURE resources_tsearch_trigger();
+
+
+--
+-- Name: tasks_tsearch; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tasks_tsearch BEFORE INSERT OR UPDATE ON tasks FOR EACH ROW EXECUTE PROCEDURE tasks_tsearch_trigger();
 
 
 --
@@ -662,19 +715,27 @@ ALTER TABLE ONLY branch_relations
 
 
 --
--- Name: instance_relations_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: instance_edges_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY instance_relations
-    ADD CONSTRAINT instance_relations_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES branches(id);
+ALTER TABLE ONLY instance_edges
+    ADD CONSTRAINT instance_edges_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES branches(id);
 
 
 --
--- Name: instance_relations_successor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: instance_edges_successor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY instance_relations
-    ADD CONSTRAINT instance_relations_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
+ALTER TABLE ONLY instance_edges
+    ADD CONSTRAINT instance_edges_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
+
+
+--
+-- Name: instances_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY instances
+    ADD CONSTRAINT instances_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
 
 
 --
@@ -731,14 +792,6 @@ ALTER TABLE ONLY task_edges
 
 ALTER TABLE ONLY tasks
     ADD CONSTRAINT tasks_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
-
-
---
--- Name: users_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY users
-    ADD CONSTRAINT users_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
 
 
 --
