@@ -65,9 +65,11 @@ module Sequel
 
         def versioned_table; @opts[:versioned_table]; end
         def last_branch_path_context
+          return unless @opts[:last_joined_table]
           Sequel.qualify(@opts[:last_joined_table], :branch_path).pg_array
         end
         def last_branch_path
+          return unless last_branch_path_context
           last_branch_path_context.concat(
               Sequel.qualify(versioned_table, :branch_path))
         end
@@ -81,7 +83,7 @@ module Sequel
             Sequel.qualify(model_table_name, c) },
                       Sequel.function(:rank)
                       .over(:partition => [last_record_id,
-                                           last_branch_path],
+                                           last_branch_path].compact,
                             :order     => @opts[:order_columns] ||
                                 Sequel.qualify(model_table_name,
                                                :version).desc))
