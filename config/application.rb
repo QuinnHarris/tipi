@@ -42,6 +42,8 @@ module Tipi
     # Defaults to true
     #config.sequel.load_database_tasks = false
 
+    config.autoload_paths << File::join(Rails.root, 'lib')
+
     config.sequel.after_connect = proc do
       Sequel::Model.db.extension :pg_array
       Sequel.extension :pg_array_ops

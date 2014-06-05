@@ -1,3 +1,5 @@
+Node
+
 class CategoriesController < ApplicationController
   # Show all categories
   # GET /categories

@@ -206,8 +206,8 @@ CREATE TABLE instance_relations (
 
 CREATE TABLE instances (
     id integer NOT NULL,
-    node_version integer,
-    node_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    resource_version integer,
+    resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     state text,
     count integer DEFAULT 1 NOT NULL,
     data text,
@@ -270,6 +270,60 @@ CREATE SEQUENCE nodes_record_id_seq
 --
 
 ALTER SEQUENCE nodes_record_id_seq OWNED BY nodes.record_id;
+
+
+--
+-- Name: resource_edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE resource_edges (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    from_record_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_record_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    type text NOT NULL,
+    data text,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: resources; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE resources (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    record_id integer NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    type text NOT NULL,
+    name text NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: resources_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE resources_record_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: resources_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE resources_record_id_seq OWNED BY resources.record_id;
 
 
 --
@@ -354,6 +408,13 @@ ALTER TABLE ONLY nodes ALTER COLUMN record_id SET DEFAULT nextval('nodes_record_
 
 
 --
+-- Name: record_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY resources ALTER COLUMN record_id SET DEFAULT nextval('resources_record_id_seq'::regclass);
+
+
+--
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -425,6 +486,22 @@ ALTER TABLE ONLY nodes
 
 
 --
+-- Name: resource_edges_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY resource_edges
+    ADD CONSTRAINT resource_edges_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: resources_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY resources
+    ADD CONSTRAINT resources_pkey PRIMARY KEY (version);
+
+
+--
 -- Name: schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -469,10 +546,10 @@ CREATE INDEX edges_to_record_id_to_branch_path_index ON edges USING btree (to_re
 
 
 --
--- Name: instances_node_version_node_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: instances_resource_version_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX instances_node_version_node_branch_path_index ON instances USING btree (node_version, node_branch_path);
+CREATE INDEX instances_resource_version_resource_branch_path_index ON instances USING btree (resource_version, resource_branch_path);
 
 
 --
@@ -487,6 +564,27 @@ CREATE INDEX nodes_record_id_index ON nodes USING btree (record_id);
 --
 
 CREATE INDEX nodes_tsv_index ON nodes USING btree (tsv);
+
+
+--
+-- Name: resource_edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX resource_edges_from_record_id_from_branch_path_index ON resource_edges USING btree (from_record_id, from_branch_path);
+
+
+--
+-- Name: resource_edges_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX resource_edges_to_record_id_to_branch_path_index ON resource_edges USING btree (to_record_id, to_branch_path);
+
+
+--
+-- Name: resources_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX resources_record_id_index ON resources USING btree (record_id);
 
 
 --
@@ -604,11 +702,11 @@ ALTER TABLE ONLY instance_relations
 
 
 --
--- Name: instances_node_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: instances_resource_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY instances
-    ADD CONSTRAINT instances_node_version_fkey FOREIGN KEY (node_version) REFERENCES nodes(version);
+    ADD CONSTRAINT instances_resource_version_fkey FOREIGN KEY (resource_version) REFERENCES resources(version);
 
 
 --
@@ -617,6 +715,22 @@ ALTER TABLE ONLY instances
 
 ALTER TABLE ONLY nodes
     ADD CONSTRAINT nodes_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: resource_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY resource_edges
+    ADD CONSTRAINT resource_edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: resources_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY resources
+    ADD CONSTRAINT resources_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
 
 
 --
