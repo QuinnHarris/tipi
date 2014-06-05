@@ -94,6 +94,7 @@ text {
 }
 #svg-container{
   background-color:#C5C8E2;
+  svg { width: 100%; } /* Needed for Firefox */
 }
 .hidden{visability: hidden;}
 .custom-box{

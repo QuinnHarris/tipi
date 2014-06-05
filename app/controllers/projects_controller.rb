@@ -151,8 +151,10 @@ class ProjectsController < ApplicationController
             n.to_edge.each do |edge|
               # KLUDGE, associations don't update because objects are frozen
               edge = edge.dup # Because its frozen
+              to = node_map[edge.from_record_id]
+              next unless to # Edge is still here but node has been deleted
               edge.instance_variable_set('@associations',
-                                         to: node_map[edge.from_record_id],
+                                         to: to,
                                          from: n)
               @edges << edge.client_values
             end
