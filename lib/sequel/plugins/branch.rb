@@ -52,7 +52,7 @@ module Sequel
           db.transaction do
             o = klass.create(options)
             add_successor(o, version)
-            o.context(&block)
+            Context.new(o).apply(&block)
             o
           end
         end

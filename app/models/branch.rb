@@ -8,13 +8,13 @@ class ProjectBranch < Branch
   
 end
 
-class ViewBranch < Branch
+class RootBranch < Branch
   def initialize(values = {})
     super({ :merge_point => true }.merge(values))
   end
 
-  def self.public
-    return @@public.dup if class_variable_defined?('@@public')
-    @@public = where(id: 1).first!
+  def self.root
+    return @@root.dup if class_variable_defined?('@@root')
+    @@root = where(id: 1).first!
   end
 end

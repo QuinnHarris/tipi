@@ -26,6 +26,20 @@ COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 SET search_path = public, pg_catalog;
 
 --
+-- Name: categories_tsearch_trigger(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION categories_tsearch_trigger() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+          BEGIN
+            NEW.tsv := setweight(to_tsvector('pg_catalog.english', coalesce(NEW.name,'')), 'A') || setweight(to_tsvector('pg_catalog.english', coalesce(NEW.doc,'')), 'B');
+            RETURN NEW;
+          END
+          $$;
+
+
+--
 -- Name: cycle_test(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -156,6 +170,88 @@ ALTER SEQUENCE branches_id_seq OWNED BY branches.id;
 
 
 --
+-- Name: version_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE version_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: categories; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE categories (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    record_id integer NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    name text NOT NULL,
+    doc text,
+    deleted boolean DEFAULT false NOT NULL,
+    tsv tsvector
+);
+
+
+--
+-- Name: categories_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE categories_record_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: categories_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE categories_record_id_seq OWNED BY categories.record_id;
+
+
+--
+-- Name: category_edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE category_edges (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    from_record_id integer NOT NULL,
+    from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_record_id integer NOT NULL,
+    to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: category_resource; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE category_resource (
+    version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    branch_id integer NOT NULL,
+    branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    category_record_id integer NOT NULL,
+    category_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    resource_record_id integer NOT NULL,
+    resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
 -- Name: instance_edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -203,18 +299,6 @@ ALTER SEQUENCE instances_id_seq OWNED BY instances.id;
 
 
 --
--- Name: version_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE version_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
 -- Name: resource_edges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -227,7 +311,6 @@ CREATE TABLE resource_edges (
     from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     to_record_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    type text NOT NULL,
     data text,
     deleted boolean DEFAULT false NOT NULL
 );
@@ -287,11 +370,11 @@ CREATE TABLE task_edgers (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
     created_at timestamp without time zone NOT NULL,
     from_record_id integer NOT NULL,
-    from_branch_id integer NOT NULL,
     from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    from_branch_id integer NOT NULL,
     to_record_id integer NOT NULL,
-    to_branch_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    to_branch_id integer NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -412,6 +495,13 @@ ALTER TABLE ONLY branches ALTER COLUMN id SET DEFAULT nextval('branches_id_seq':
 
 
 --
+-- Name: record_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY categories ALTER COLUMN record_id SET DEFAULT nextval('categories_record_id_seq'::regclass);
+
+
+--
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -461,6 +551,30 @@ ALTER TABLE ONLY branch_relations
 
 ALTER TABLE ONLY branches
     ADD CONSTRAINT branches_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY categories
+    ADD CONSTRAINT categories_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: category_edges_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY category_edges
+    ADD CONSTRAINT category_edges_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: category_resource_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY category_resource
+    ADD CONSTRAINT category_resource_pkey PRIMARY KEY (version);
 
 
 --
@@ -543,6 +657,48 @@ CREATE INDEX actions_task_version_task_branch_path_index ON actions USING btree 
 
 
 --
+-- Name: categories_record_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX categories_record_id_index ON categories USING btree (record_id);
+
+
+--
+-- Name: categories_tsv_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX categories_tsv_index ON categories USING btree (tsv);
+
+
+--
+-- Name: category_edges_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX category_edges_from_record_id_from_branch_path_index ON category_edges USING btree (from_record_id, from_branch_path);
+
+
+--
+-- Name: category_edges_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX category_edges_to_record_id_to_branch_path_index ON category_edges USING btree (to_record_id, to_branch_path);
+
+
+--
+-- Name: category_resource_category_record_id_category_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX category_resource_category_record_id_category_branch_path_index ON category_resource USING btree (category_record_id, category_branch_path);
+
+
+--
+-- Name: category_resource_resource_record_id_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX category_resource_resource_record_id_resource_branch_path_index ON category_resource USING btree (resource_record_id, resource_branch_path);
+
+
+--
 -- Name: instances_resource_version_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -578,17 +734,17 @@ CREATE INDEX resources_tsv_index ON resources USING btree (tsv);
 
 
 --
--- Name: task_edgers_from_record_id_from_branch_path_from_branch_id_inde; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: task_edgers_from_record_id_from_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX task_edgers_from_record_id_from_branch_path_from_branch_id_inde ON task_edgers USING btree (from_record_id, from_branch_path, from_branch_id);
+CREATE INDEX task_edgers_from_record_id_from_branch_path_index ON task_edgers USING btree (from_record_id, from_branch_path);
 
 
 --
--- Name: task_edgers_to_record_id_to_branch_path_to_branch_id_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: task_edgers_to_record_id_to_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX task_edgers_to_record_id_to_branch_path_to_branch_id_index ON task_edgers USING btree (to_record_id, to_branch_path, to_branch_id);
+CREATE INDEX task_edgers_to_record_id_to_branch_path_index ON task_edgers USING btree (to_record_id, to_branch_path);
 
 
 --
@@ -662,6 +818,13 @@ CREATE UNIQUE INDEX users_unlock_token_index ON users USING btree (unlock_token)
 
 
 --
+-- Name: categories_tsearch; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER categories_tsearch BEFORE INSERT OR UPDATE ON categories FOR EACH ROW EXECUTE PROCEDURE categories_tsearch_trigger();
+
+
+--
 -- Name: cycle_test; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -712,6 +875,30 @@ ALTER TABLE ONLY branch_relations
 
 ALTER TABLE ONLY branch_relations
     ADD CONSTRAINT branch_relations_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
+
+
+--
+-- Name: categories_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY categories
+    ADD CONSTRAINT categories_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: category_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY category_edges
+    ADD CONSTRAINT category_edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: category_resource_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY category_resource
+    ADD CONSTRAINT category_resource_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
 
 
 --

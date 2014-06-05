@@ -9,9 +9,4 @@ FactoryGirl.define do
       sequence(:doc) { |n| "Important Document #{n}" }
     end
   end
-
-
-  factory :project do
-    sequence(:name) { |n| "Project #{n}" }
-  end
 end

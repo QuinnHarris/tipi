@@ -13,6 +13,7 @@ module Sequel
 
         column :"#{prefix}_branch_path".tap { |s| rows << s }, 'integer[]', null: false, default: '{}'
         index rows
+        rows
       end
     end
   end
@@ -95,21 +96,16 @@ module Sequel
       end
     end
 
-    def create_many_to_many_version_table(table_name, options = {}, &block)
-      create_version_table table_name, no_record: true, no_branch: options[:inter_branch] do
-        fgn_keys = [:from, :to].map do |aspect|
-          rows = %w(record_id branch_path branch_id).map { |n| :"#{aspect}_#{n}" }
-          rows.pop unless options[:inter_branch]
-          record_id, branch_path, branch_id = rows
-          # must be in set of record_ids on nodes but record_ids is not unique
-          Integer record_id, null: false
-          
-          foreign_key branch_id, :branches, null: false if branch_id
-          column branch_path, 'integer[]', null: false, default: '{}'
-          
-          index rows
-          rows
-        end.flatten
+    def create_many_to_many_version_table(table_name, opts = {}, &block)
+      create_version_table table_name, no_record: true, no_branch: opts[:inter_branch] do
+        src_table = opts[:src_table]
+        dst_table = opts[:dst_table] || src_table
+        src_prefix = opts[:src_prefix] || (src_table == dst_table ? :from : src_table.to_s.singularize)
+        dst_prefix = opts[:dst_prefix] || (src_table == dst_table ? :to : dst_table.to_s.singularize)
+        [[src_table, src_prefix], [dst_table, dst_prefix]].each do |table, prefix|
+          ver_foreign_key prefix, table_name: table
+          foreign_key :"#{prefix}_branch_id", :branches, null: false if opts[:inter_branch]
+        end
 
         instance_eval(&block) if block_given?
 
@@ -196,8 +192,8 @@ Sequel.migration do
     end
     full_text_search :resources, { :name => 'A', :doc => 'B' }
 
-    create_many_to_many_version_table(:resource_edges) do
-      String        :type, null: false
+    create_many_to_many_version_table(:resource_edges, src_table: :resources) do
+   #   String        :type, null: false
       String        :data
     end
 
@@ -211,9 +207,20 @@ Sequel.migration do
     end
     full_text_search :tasks, { :name => 'A', :doc => 'B' }
 
-    create_many_to_many_version_table(:task_edges)
-    create_many_to_many_version_table(:task_edgers, inter_branch: true)
+    create_many_to_many_version_table(:task_edges, src_table: :tasks)
+    create_many_to_many_version_table(:task_edgers, src_table: :tasks, inter_branch: true)
 
+
+    create_version_table :categories do
+      String        :name, null: false
+      String        :doc,  text: true
+    end
+    full_text_search :categories, { :name => 'A', :doc => 'B' }
+
+    create_many_to_many_version_table(:category_edges, src_table: :categories)
+    create_many_to_many_version_table(:category_resource,
+                                      src_table: :categories,
+                                      dst_table: :resources)
 
     create_table :instances do
       primary_key :id

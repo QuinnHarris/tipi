@@ -12,7 +12,7 @@ class ProjectsController < ApplicationController
   end
 
   def create
-    ViewBranch.public.context do
+    RootBranch.root.context do
       category = Category.where(version: params[:category][:version]).first
       @project = category.add_project(params[:project])
     end
@@ -20,13 +20,14 @@ class ProjectsController < ApplicationController
     redirect_to project_path(@project), notice: 'Category was successfully created.'
   end
 
-  before_action :set_project, except: [:index, :new, :create, :branch]
+  before_action :set_project, except: [:index, :new, :create]
   private
   def set_project
-    project = Project.dataset(ViewBranch.public)
-      .where(version: Integer(params[:id])).first
-    # All operations in the branch of this project
-    @project = project.with_this_context
+    ds = Project.where(record_id: Integer(params[:id]))
+    ds = ds.where(branch_id: Integer(params[:branch])) if params[:branch]
+    # Need to check project permissions
+    @project = ds.finalize.first
+    raise "Project not found" unless @project
   end
   public
 
@@ -35,7 +36,6 @@ class ProjectsController < ApplicationController
   end
 
   def update
-    @project = @project.with_this_context
     if @project.create(params[:project])
       redirect_to categories_url, notice: 'Project was successfully updated.'
     else
@@ -48,9 +48,7 @@ class ProjectsController < ApplicationController
   end
 
   def branch
-    project = Project.dataset(ViewBranch.public)
-      .where(version: Integer(params[:id])).first
-    new_project = project.clone(params[:project])
+    project = @project.clone(params[:project])
 
     redirect_to project_path(project), notice: 'Project was successfully cloned.'
   end
@@ -152,7 +150,7 @@ class ProjectsController < ApplicationController
               # KLUDGE, associations don't update because objects are frozen
               edge = edge.dup # Because its frozen
               edge.instance_variable_set('@associations',
-                                         to: node_map[edge.from_record_id],
+                                         to: node_map[edge.to_record_id],
                                          from: n)
               @edges << edge.client_values
             end
@@ -219,7 +217,7 @@ class ProjectsController < ApplicationController
 
           resp = case type
           when 'node'
-            fields = { 'created_at' => created_at}
+            fields = { }
             if op != 'remove'
               %w(name doc).each do |k|
                 next unless hash[k]
@@ -228,6 +226,7 @@ class ProjectsController < ApplicationController
               end
               raise "Expected name or doc" if fields.empty?
             end
+            fields.merge!( 'created_at' => created_at, :resource => @project )
 
             if op == 'add'
               raise "Name required" unless fields['name']

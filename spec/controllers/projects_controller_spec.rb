@@ -19,6 +19,7 @@ describe ProjectsController do
 
   it "can create and modify project" do
     # Create Project
+    Resource
     project_attrs = attributes_for(:project)
     post :create, { category: { version: 1 }, project: project_attrs }
     project = assigns(:project)
@@ -30,7 +31,7 @@ describe ProjectsController do
       node_attr = attributes_for(:task_ajax)
       #    expect(Node).to receive(:create).with(name: node_1_attr[:name]).once
 
-      resp_data = write_request(project.version, node_attr)
+      resp_data = write_request(project.record_id, node_attr)
       expect(resp_data).to have(1).items
 
       node_data = resp_data.first
@@ -44,36 +45,36 @@ describe ProjectsController do
 
     # Create Edge
     edge_attr = attributes_for(:task_edge_ajax, u: node_1_id, v: node_2_id)
-    resp_data = write_request(project.version, edge_attr)
+    resp_data = write_request(project.record_id, edge_attr)
     expect(resp_data).to have(1).items
 
     data << (edge_data = resp_data.first.symbolize_keys)
     expect(edge_data.except(:id, :branch_id, :branch_path, :v_record_id, :v_branch_path, :u_record_id, :u_branch_path, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
-    get :show, { id: project.version, format: :json }
+    get :show, { id: project.record_id, format: :json }
     expect(response_json).to match_array(data)
 
     # Remove Edge
     data.delete(edge_data)
     edge_attr.merge!(op: 'remove')
-    resp_data = write_request(project.version, edge_attr)
+    resp_data = write_request(project.record_id, edge_attr)
     expect(resp_data).to have(1).items
     expect(resp_data.first.except(:id, :branch_id, :branch_path, :v_record_id, :v_branch_path, :u_record_id, :u_branch_path, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
-    get :show, { id: project.version, format: :json }
+    get :show, { id: project.record_id, format: :json }
     expect(response_json).to match_array(data)
 
     # Remove Node
     node_attr = data.pop
     node_attr.merge!(op: 'remove')
-    resp_data = write_request(project.version, node_attr)
+    resp_data = write_request(project.record_id, node_attr)
     expect(resp_data).to have(1).items
     expect(resp_data.first).to eq(node_attr)
 
     # Retrieve Data
-    get :show, { id: project.version, format: :json }
+    get :show, { id: project.record_id, format: :json }
     expect(response_json).to match_array(data)
 
     # Add Node and Edge in one request
@@ -81,7 +82,7 @@ describe ProjectsController do
     node_attr = attributes_for(:task_ajax, cid: source_id)
     edge_attr = attributes_for(:task_edge_ajax, u: node_1_id, cv: source_id)
     request = [node_attr, edge_attr]
-    resp_data = write_request(project.version, request)
+    resp_data = write_request(project.record_id, request)
     expect(resp_data).to have(2).items
 
     node_3_data = resp_data.first
@@ -95,7 +96,7 @@ describe ProjectsController do
 
     # Change a nodee
     node_attr = attributes_for(:task_ajax, op: 'change', id: node_3_data[:id])
-    resp_data = write_request(project.version, node_attr)
+    resp_data = write_request(project.record_id, node_attr)
     expect(resp_data).to have(1).items
     node_data = resp_data.first
     expect(node_data[:id]).to be > node_attr[:id]
@@ -104,7 +105,7 @@ describe ProjectsController do
 
     # Check post_doc interface
     node_attr = attributes_for(:task_ajax)
-    post :post_doc, { id: project.version, version: node_data[:id], body: node_attr[:doc] }
+    post :post_doc, { id: project.record_id, version: node_data[:id], body: node_attr[:doc] }
 
   end
 end

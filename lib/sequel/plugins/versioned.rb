@@ -62,9 +62,11 @@ module Sequel
 
         def versioned_table; @opts[:versioned_table]; end
         def last_branch_path_context
+          return unless @opts[:last_joined_table]
           Sequel.qualify(@opts[:last_joined_table], :branch_path).pg_array
         end
         def last_branch_path
+          return unless last_branch_path_context
           last_branch_path_context.concat(
               Sequel.qualify(versioned_table, :branch_path))
         end
@@ -78,7 +80,7 @@ module Sequel
             Sequel.qualify(model_table_name, c) },
                       Sequel.function(:rank)
                       .over(:partition => [last_record_id,
-                                           last_branch_path],
+                                           last_branch_path].compact,
                             :order     => @opts[:order_columns] ||
                                 Sequel.qualify(model_table_name,
                                                :version).desc))
@@ -127,7 +129,10 @@ module Sequel
 
       module InstanceMethods
         def context(&block)
-          @context.apply(&block)
+          unless ctx = @context
+            ctx = Branch::Context.get(branch)
+          end
+          ctx.apply(&block)
         end
 
         def with_this_context
@@ -294,7 +299,7 @@ module Sequel
           ensure_associated_primary_key(opts, o, *args)
           return if run_association_callbacks(opts, :before_add, o) == false
           return if !(r = send(opts._add_method, o, *args)) && opts.handle_silent_modification_failure?
-          raise(Sequel::Error, "expected #{opts[:join_class]} from _add_method got #{r.inspect}") unless r.instance_of?(opts[:join_class])
+          raise(Sequel::Error, "expected #{opts[:join_class]} from _add_method got #{r.inspect}") unless !opts[:join_class] or r.instance_of?(opts[:join_class])
           if array = associations[opts[:name]] and !array.include?(o)
             array.push(o)
           end
@@ -316,6 +321,7 @@ module Sequel
           raise(Sequel::Error, "associated object #{o.inspect} does not have a primary key") if opts.need_associated_primary_key? && !o.pk
           return if run_association_callbacks(opts, :before_remove, o) == false
           return if !(r = send(opts._remove_method, o, *args)) && opts.handle_silent_modification_failure?
+          raise(Sequel::Error, "expected #{opts[:join_class]} from _add_method got #{r.inspect}") unless !opts[:join_class] or r.instance_of?(opts[:join_class])
           associations[opts[:name]].delete_if{|x| o === x} if associations.include?(opts[:name])
           remove_reciprocal_object(opts, o)
           run_association_callbacks(opts, :after_remove, o)
@@ -418,8 +424,8 @@ module Sequel
             opts[:join_table] = join_table
           end
 
-          { left: opts.delete(:key) || name,
-            right: opts[:reciprocal] }.each do |prefix, key_prefix|
+          { left: self.name.underscore,
+            right: name.to_s.singularize }.each do |prefix, key_prefix|
             ver_common_ops(opts,
                            opts[:"#{prefix}_key_prefix"] ||= key_prefix,
                            prefix)
@@ -443,13 +449,14 @@ module Sequel
 
             # !!! Implement check for inter_branch
             unless opts[:inter_branch]
-              ds = join_class.dataset(ctx, no_finalize: true).where(h_record_id)
+              ds = self.class.db[join_table].extend(DatasetBranchContext)
+                       .join_context(ctx.dataset).where(h_record_id)
               h_branch_path.each do |col, val|
                 ds = ds.where(ds.last_branch_path_context.concat(
                                   Sequel.qualify(ds.versioned_table, col)) => val)
               end
               p = ds.order(Sequel.qualify(ds.versioned_table, :version).desc).first
-              exists = p && !p.deleted
+              exists = p && !p[:deleted]
               if !exists != !delete
                 raise VersionedError, "Edge add doesn't change edge state"
               end
@@ -466,7 +473,7 @@ module Sequel
             h.merge!(:created_at => created_at || self.class.dataset.current_datetime,
                      :deleted => delete ? true : false)
 
-            join_class.create(h)
+            join_class ? join_class.create(h) : self.class.db[join_table].insert(h)
           end
 
           opts[:remover] = proc do |node, branch = nil, created_at = nil|

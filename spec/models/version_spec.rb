@@ -8,7 +8,7 @@ describe Branch do
     end
 
     it "node object has activemodel bahavior" do
-      node_a = Task.new(name: 'Node A', branch: @branch)
+      node_a = Resource.new(name: 'Node A', branch: @branch)
       expect(node_a.persisted?).to be_false
       expect(node_a.to_key).to be_nil
       node_a.save
@@ -24,17 +24,17 @@ describe Branch do
   # Use branch pass interface
   it "can add and remove nodes" do
     branch = Branch.create(name: 'Base')
-    node_a = Task.create(name: 'Node A', branch: branch)
-    expect(node_a).to be_an_instance_of(Task)
+    node_a = Resource.create(name: 'Node A', branch: branch)
+    expect(node_a).to be_an_instance_of(Resource)
     expect(node_a.branch).to eq(branch)
 
-    expect(Task.dataset(branch).all).to eq([node_a])
+    expect(Resource.dataset(branch).all).to eq([node_a])
     node_a_delete = node_a.delete(branch: branch)
-    expect(node_a_delete).to be_an_instance_of(Task)
+    expect(node_a_delete).to be_an_instance_of(Resource)
     expect(node_a_delete.version).to be > node_a.version
-    expect(Task.dataset(branch).all).to eq([])
+    expect(Resource.dataset(branch).all).to eq([])
     
-    expect(Task.dataset(Sequel::Plugins::Branch::Context.new(branch, node_a.version)).all).
+    expect(Resource.dataset(Sequel::Plugins::Branch::Context.new(branch, node_a.version)).all).
       to eq([node_a])
   end
 
@@ -49,46 +49,46 @@ describe Branch do
     node_a = node_b = node_c = nil
 
     br_a = Branch.create(name: 'Branch A') do
-      node_a = Task.create(name: 'Node A')
+      node_a = Resource.create(name: 'Node A')
     end
 
     br_b = br_a.fork(name: 'Branch B') do
-      node_b = Task.create(name: 'Node B')
-      expect(Task.all).to match_array([node_a, node_b])
+      node_b = Resource.create(name: 'Node B')
+      expect(Resource.all).to match_array([node_a, node_b])
     end
 
     br_a.context do
-      expect(Task.all).to match_array([node_a])
+      expect(Resource.all).to match_array([node_a])
     end
 
     br_c = br_b.fork(name: 'Branch C', version_lock: true) do
-      expect(Task.all).to match_array([node_a, node_b])
+      expect(Resource.all).to match_array([node_a, node_b])
       node_a_del = node_a.delete
       expect(node_a_del.context).to eq(Sequel::Plugins::Branch::Context.current)
-      expect(Task.all).to match_array([node_b])
+      expect(Resource.all).to match_array([node_b])
 
       expect { br_a.context { } }.to raise_error(BranchContextError, /^Branch found.+but/)
     end
 
     br_b.context do
       br_a.context do
-        node_c = Task.create(name: 'Node C')
-        expect(Task.all).to match_array([node_a, node_c])
+        node_c = Resource.create(name: 'Node C')
+        expect(Resource.all).to match_array([node_a, node_c])
       end
 
-      expect(Task.all).to match_array([node_a, node_b, node_c])
+      expect(Resource.all).to match_array([node_a, node_b, node_c])
 
-      expect { Task.create(name: 'Fail', branch: br_c) }.to raise_error(BranchContextError, /^Branch not found for/)
+      expect { Resource.create(name: 'Fail', branch: br_c) }.to raise_error(BranchContextError, /^Branch not found for/)
     end
 
     br_c.context do
-      expect(Task.all).to match_array([node_b])
+      expect(Resource.all).to match_array([node_b])
 
       node_b_del = node_b.delete
-      expect(Task.all).to eq([])
+      expect(Resource.all).to eq([])
 
       br_c.context(version: node_b_del.version-1) do
-        expect(Task.all).to match_array([node_b])
+        expect(Resource.all).to match_array([node_b])
 
         expect { node_b.delete }.to raise_error(BranchContextError, "Context without version required")
 
@@ -98,7 +98,7 @@ describe Branch do
 
     # Merge Tests
     br_d = Branch.merge(br_a, br_b, name: 'Merge AB') do
-      expect(Task.all)
+      expect(Resource.all)
         .to match_array(bp_match([[node_a, br_a],
                                   [node_a, br_b],
                                   [node_b, br_b],
@@ -107,8 +107,8 @@ describe Branch do
       
       node_b_new = node_b.create(name: "Node B v2")
       
-      node_b_row = Task.db[:tasks].where(version: node_b.version).first
-      node_b_new_row = Task.db[:tasks].where(version: node_b_new.version).first
+      node_b_row = Resource.db[:resources].where(version: node_b.version).first
+      node_b_new_row = Resource.db[:resources].where(version: node_b_new.version).first
 
       expect(node_b_row.delete(:branch_path)).to eq([])
       expect(node_b_new_row.delete(:branch_path)).to eq([br_b.id])
@@ -129,11 +129,11 @@ describe Branch do
   it "can link nodes with edges" do
     node_a = node_b = node_c = nil
     br_A = Branch.create(name: 'Branch A') do
-      node_a = Task.create(name: 'Node A')
-      node_b = Task.create(name: 'Node B')
+      node_a = Resource.create(name: 'Node A')
+      node_b = Resource.create(name: 'Node B')
 
       edge = node_a.add_to(node_b)
-      expect(edge).to be_an_instance_of(TaskEdge)
+      expect(edge).to be_an_instance_of(ResourceEdge)
       expect(edge.context).to eq(node_a.context)
       expect(edge.to).to eq(node_b)
       expect(edge.from).to eq(node_a)
@@ -152,8 +152,8 @@ describe Branch do
     end
 
     br_B = br_A.fork(name: 'Branch B') do
-      node_c = Task.create(name: 'Node C')
-      expect(node_c.add_from(node_a)).to be_an_instance_of(TaskEdge)
+      node_c = Resource.create(name: 'Node C')
+      expect(node_c.add_from(node_a)).to be_an_instance_of(ResourceEdge)
 
       expect_connect(node_a, :to, [node_b, node_c])
 
@@ -185,8 +185,8 @@ describe Branch do
     br_D = Branch.merge(br_A, br_B, name: 'Branch D (A B Merge)') do
       # Node A
       expect { node_a.to }.to raise_error(BranchContextError, /^Object Duplicated/)
-      node_a_list = Task.where(name: 'Node A').all
-      expect(Task.where(record_id: node_a.record_id).all).to match_array(node_a_list)
+      node_a_list = Resource.where(name: 'Node A').all
+      expect(Resource.where(record_id: node_a.record_id).all).to match_array(node_a_list)
       expect(node_a_list).to eq(bp_match([[node_a, br_A], [node_a, br_B]]))
       node_a_A, node_a_B = node_a_list.sort_by { |n| n.branch_path }
       expect(node_a_A).to_not eq(node_a_B)
@@ -200,7 +200,7 @@ describe Branch do
       # In this case the branch suggests it can be duplicated but node_b is removed
       # in branch b so it is not duplicated.  Have it check? or feature bloat
       expect { node_b.to }.to raise_error(BranchContextError, /^Object Duplicated/)
-      node_b_list = Task.where(name: 'Node B').all
+      node_b_list = Resource.where(name: 'Node B').all
       expect(node_b_list).to eq(bp_match([[node_b, br_A]]))
       expect_connect(node_b_list.first, :to, [])
       expect_connect(node_b_list.first, :from, [node_a_A])
@@ -210,7 +210,7 @@ describe Branch do
       expect_connect(node_c, :from, [node_a_B])
 
       # Edge in this branch
-      expect(node_a_A.add_to(node_c)).to be_an_instance_of(TaskEdge)
+      expect(node_a_A.add_to(node_c)).to be_an_instance_of(ResourceEdge)
       expect_connect(node_a_A, :to, [node_b, node_c])
       expect_connect(node_c, :from, [node_a_A, node_a_B])
 
@@ -219,26 +219,28 @@ describe Branch do
       expect(node_a_A.context).to eq(Sequel::Plugins::Branch::Context.current)
       node_a_A_new = node_a_A.create(name: 'Node A v2')
 
-      node_a_list = Task.where(record_id: node_a.record_id).all
+      node_a_list = Resource.where(record_id: node_a.record_id).all
       expect(node_a_list).to eq([node_a_A_new, node_a_B])
     end
   end
 
   it "can make interbranch edges" do
-    node_a = node_b = node_c = nil
+    node_a = node_b = node_c = resource_a = nil
     br_a = Branch.create(name: 'Branch A') do
-      node_a = Task.create(name: 'Node A')
+      resource_a = Resource.create(name: 'Resource A')
+      node_a = Task.create(name: 'Node A', resource: resource_a)
     end
 
     br_b = Branch.create(name: 'Branch B') do
-      node_b = Task.create(name: 'Node B')
+      resource_b = Resource.create(name: 'Resource B')
+      node_b = Task.create(name: 'Node B', resource: resource_b)
       node_b.add_from_inter(node_a)
       expect(node_b.from_inter).to eq([node_a])
     end
 
     br_a.context do
       expect(node_a.to_inter).to eq([node_b])
-      node_c = Task.create(name: 'Node C')
+      node_c = Task.create(name: 'Node C', resource: resource_a)
       node_a.add_to_inter(node_c)
       expect(node_a.to_inter).to match_array([node_b, node_c])
     end
