@@ -1,5 +1,18 @@
-#button-container
-  %button#add-node.button= "Add a node"
-  %button#load-project.button= "Load a project"
-  %button#toggle-direction.button= "Toggle graph orientation"
-#nodes-container{ 'data-path' => project_path(@project) }
+#app-container
+  #doc-container
+    #doc-title.text-center
+    #doc.custom-box
+  #nodes-container{ 'data-path' => project_path(@project) }
+    #buttons-container
+      #buttons-left
+        %button#add-node.node-button.fa.fa-plus.fa-lg{title: 'Add a new Node'}
+        %button#toggle-direction.node-button.fa.fa-arrows-h.fa-lg{title: 'toggle orientation'}
+        %button#load-project.node-button.fa.fa-refresh.fa-lg{title: 'refresh'}
+      #project-title-container
+        %h3.project-title Project Title
+        %div.project-subtitle Project info + rating
+      #buttons-right
+        %button#fork-project.node-button.fa.fa-code-fork.fa-lg{title: 'Fork this Project'}
+        %button#upvote.node-button.fa.fa-chevron-up.fa-lg{title: 'upvote'}
+        %button#share-project.node-button.fa.fa-share.fa-lg{title: 'share project'}
+    #svg-container
