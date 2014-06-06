@@ -170,7 +170,7 @@ class ProjectsController < ApplicationController
         data += @nodes.map { |n| n.client_values.merge(type: :node, op: :add) }
         data += @edges.map { |n| n.client_values.merge(type: :edge, op: :add) }
 
-        render :json => data.sort_by { |h| h['created_at'] }
+        render :json => data
       end
     end
   end
