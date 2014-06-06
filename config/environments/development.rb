@@ -38,8 +38,8 @@ Rails.application.configure do
   config.action_mailer.default_url_options = { :host => 'localhost:3000' }
 end
 
-ActiveSupport::Dependencies.explicitly_unloadable_constants += [
-    'Sequel::Plugins::Branch',
-    'Sequel::Plugins::Branch::Context',
-    'Sequel::Plugins::Versioning',
-]
+#ActiveSupport::Dependencies.explicitly_unloadable_constants += [
+#    'Sequel::Plugins::Branch',
+#    'Sequel::Plugins::Branch::Context',
+#    'Sequel::Plugins::Versioning',
+#]

@@ -3,7 +3,8 @@ class VersionedError < StandardError; end
 module Sequel
   module Plugins
     module Versioning
-      Branch
+      Sequel::Plugins::Branch
+      Sequel::Plugins::Branch::Context
       module DatasetBranchContext
         attr_reader :context
         private
@@ -77,10 +78,10 @@ module Sequel
 
         # Pick latest versions and remove deleted records
         def finalize(opts = {})
-          return self if opts[:no_finalize]
           model_table_name = model.raw_dataset.first_source_table
-          ds = select(*model.columns.map { |c|
-            Sequel.qualify(model_table_name, c) },
+          sel_cols = model.columns.map { |c| Sequel.qualify(model_table_name, c) }
+          return select(*sel_cols) if opts[:no_finalize]
+          ds = select(*sel_cols,
                       Sequel.function(:rank)
                       .over(:partition => [last_record_id,
                                            last_branch_path].compact,

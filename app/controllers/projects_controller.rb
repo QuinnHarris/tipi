@@ -141,33 +141,36 @@ class ProjectsController < ApplicationController
         @edges = []
 
         @project.context do
-          @nodes = Node.exclude(:type => 'Project').all
-          node_map = {}
-          @nodes.each do |node|
-            node_map[node.record_id] = node
-          end
+          if params[:all]
+            @nodes = Node.dataset(nil, no_finalize: true).exclude(:type => 'Project').all
+            @edges = Edge.dataset(nil, no_finalize: true).all
+          else
+            @nodes = Node.exclude(:type => 'Project').all
+            node_map = {}
+            @nodes.each do |node|
+              node_map[node.record_id] = node
+            end
 
-          @nodes.each do |n|
-            n.to_edge.each do |edge|
-              # KLUDGE, associations don't update because objects are frozen
-              edge = edge.dup # Because its frozen
-              to = node_map[edge.from_record_id]
-              next unless to # Edge is still here but node has been deleted
-              edge.instance_variable_set('@associations',
-                                         to: to,
-                                         from: n)
-              @edges << edge.client_values
+            @nodes.each do |n|
+              n.to_edge.each do |edge|
+                # KLUDGE, associations don't update because objects are frozen
+                edge = edge.dup # Because its frozen
+                to = node_map[edge.from_record_id]
+                next unless to # Edge is still here but node has been deleted
+                edge.instance_variable_set('@associations',
+                                           to: to,
+                                           from: n)
+                @edges << edge
+              end
             end
           end
         end
-        
-        data = []
-        data += @nodes.map { |n| n.client_values.merge(type: :node,
-                                                       op: :add) }
-        data += @edges.map { |h| { type: :edge,
-                                   op: :add }.merge(h) }
 
-        render :json => data
+        data = []
+        data += @nodes.map { |n| n.client_values.merge(type: :node, op: :add) }
+        data += @edges.map { |n| n.client_values.merge(type: :edge, op: :add) }
+
+        render :json => data.sort_by { |h| h['created_at'] }
       end
     end
   end
@@ -268,6 +271,10 @@ class ProjectsController < ApplicationController
             end
 
             edge = from.send("#{op}_to", to, nil, created_at)
+            edge = edge.dup
+            edge.instance_variable_set('@associations',
+                                       to: to,
+                                       from: from)
             hash.merge(edge.client_values)
           else
             raise "Expected type to be Node or Edge"
