@@ -1,5 +1,6 @@
 Branch
 Task
+Resource
 
 class ProjectsController < ApplicationController
   def index
@@ -8,7 +9,7 @@ class ProjectsController < ApplicationController
 
   def new
     @category = Category.where(version: params[:category]).first
-    @project = Project.new(branch: ViewBranch.public)
+    @project = Project.new(branch: RootBranch.root)
   end
 
   def create
@@ -23,10 +24,9 @@ class ProjectsController < ApplicationController
   before_action :set_project, except: [:index, :new, :create]
   private
   def set_project
-    ds = Project.where(record_id: Integer(params[:id]))
-    ds = ds.where(branch_id: Integer(params[:branch])) if params[:branch]
-    # Need to check project permissions
-    @project = ds.finalize.first
+    record_id, branch_id = params[:id].split('-')
+    branch = Branch.where(id: branch_id).first
+    @project = Project.dataset(branch).where(record_id: Integer(record_id)).first
     raise "Project not found" unless @project
   end
   public
@@ -140,7 +140,7 @@ class ProjectsController < ApplicationController
 
         @project.context do
           if params[:all]
-            @nodes = Task.dataset(nil, no_finalize: true).exclude(:type => 'Project').all
+            @nodes = Task.dataset(nil, no_finalize: true).all
             @edges = TaskEdge.dataset(nil, no_finalize: true).all
           else
             @nodes = Task.exclude(:type => 'Project').all

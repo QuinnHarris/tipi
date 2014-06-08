@@ -9,17 +9,17 @@ class Task < Sequel::Model
   one_to_many :actions, key: [:task_version, :task_branch_path],
               primary_key: [:version, :branch_path]
 
-  [[TaskEdge, false], [TaskEdger, true]].each do |join_class, inter_branch|
+  [[TaskEdge, nil], [TaskEdger, true]].each do |join_class, inter_branch|
     aspects = [:from, :to]
     aspects.zip(aspects.reverse).each do |aspect, opposite|
       relation_name = :"#{aspect}#{inter_branch ? '_inter' : ''}"
       ver_many_to_many relation_name, :class => self, join_class: join_class,
                        left_key_prefix: opposite, right_key_prefix: aspect,
-                       inter_branch: inter_branch
+                       inter: inter_branch && :branch
 
       ver_one_to_many :"#{relation_name}_edge", :class => join_class,
                       key: opposite, target_prefix: aspect,
-                      inter_branch: inter_branch, read_only: true
+                      inter: inter_branch && :branch, read_only: true
     end
   end
 

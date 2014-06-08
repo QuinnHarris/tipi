@@ -122,7 +122,7 @@ module Sequel
         end
 
         def context_dataset_select_list(branch_id, version)
-          [   Sequel.as(branch_id, :branch_id),
+          [   Sequel.as(branch_id || Sequel.cast(nil, :integer), :branch_id),
               Sequel.cast(nil, :integer).as(:successor_id),
               Sequel.cast(version, :bigint).as(:version),
               Sequel.as(0, :depth),
@@ -142,7 +142,9 @@ module Sequel
           context_dataset_recursive(b_ds)
         end
 
-        def context_dataset_from_set(ds, join_column = :branch_id, version = nil)
+        def context_dataset_from_set(ds, join_column = nil, version = nil)
+          join_column ||= :branch_id
+
           if has_merge_point? or use_context_name?
             ds = ds.join(table_name, :id => join_column)
           end
@@ -158,11 +160,10 @@ module Sequel
 
           ds = ds.select_append(Sequel.as(join_column, :context_id))
 
-          context_dataset_recursive(ds, true)
+          context_dataset_recursive(ds, true, :branch_decend_sub)
         end
 
-        def context_dataset_recursive(base_ds, include_context = nil)
-          cte_table = :branch_decend
+        def context_dataset_recursive(base_ds, include_context = nil, cte_table = :branch_decend)
           connect_table = :branch_relations
 
           # Connect from the working set (cte_table) through the connect_table back to

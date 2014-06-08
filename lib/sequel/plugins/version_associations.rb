@@ -9,7 +9,7 @@ module Sequel
           dataset = r.associated_class.raw_dataset
 
           # Change context_data to include context table for inter branch dst
-          if r[:inter_branch]
+          if r[:inter]
             table_common = r[:join_table]
             ds_br = ::Branch.context_dataset_from_set(dataset.from(table_common)
                                                     .exclude(:in_context),
@@ -20,7 +20,8 @@ module Sequel
                 .select_append(Sequel.as(nil, :context_id)))
 
             ds = ds.where { (Sequel.expr(:context_id => nil) & :in_context) |
-                Sequel.expr(:context_id => r[:right_branch_id]) }
+                Sequel.expr(:context_id => r[:right_branch_id] ||
+                                           Sequel.qualify(r[:join_table], :branch_id) ) }
           end
 
           # Join branch context table(s)
@@ -28,7 +29,7 @@ module Sequel
                                table_alias: :branch_nodes)
 
           # Exclude final nodes based on node branch_path
-          if r[:inter_branch]
+          if r[:inter]
 
           else
             ds = ds.where(node_branch_path => ds.last_branch_path)
@@ -40,10 +41,16 @@ module Sequel
 
       module ClassMethods
         private
-        def ver_common_ops(opts, key_prefix, prefix = nil)
+        def ver_common_opts(opts)
+          unless [nil, :branch, :context].include?(opts[:inter])
+            raise "inter must be :branch or :context"
+          end
+        end
+
+        def ver_connect_opts(opts, key_prefix, prefix = nil)
           key_prefix = "#{key_prefix}_" if key_prefix
           prefix = "#{prefix}_" if prefix
-          ['record_id', 'branch_path', opts[:inter_branch] && 'branch_id'
+          ['record_id', 'branch_path', opts[:inter] == :branch ? 'branch_id' : nil
           ].compact.each do |sufix|
             opts[:"#{prefix}#{sufix}"] ||= :"#{key_prefix}#{sufix}"
           end
@@ -53,7 +60,8 @@ module Sequel
 
         def ver_many_to_one(name, opts=OPTS, &block)
           opts = opts.dup
-          ver_common_ops(opts, opts[:key] || name)
+          ver_common_opts(opts)
+          ver_connect_opts(opts, opts[:key] || name)
           opts[:key] = opts[:record_id] # Kludge to prevent stack level to deep
 
           opts[:dataset] = proc do |r|

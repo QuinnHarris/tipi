@@ -74,10 +74,10 @@ module Sequel
 
         # Pick latest versions and remove deleted records
         def finalize(opts = {})
-          return self if opts[:no_finalize]
           model_table_name = model.raw_dataset.first_source_table
-          ds = select(*model.columns.map { |c|
-            Sequel.qualify(model_table_name, c) },
+          sel_col = model.columns.map { |c| Sequel.qualify(model_table_name, c) }
+          return select(*sel_col) if opts[:no_finalize]
+          ds = select(*sel_col,
                       Sequel.function(:rank)
                       .over(:partition => [last_record_id,
                                            last_branch_path].compact,
@@ -187,7 +187,7 @@ module Sequel
         end
 
         def versions_dataset(all = false)
-          ds = all ? self.class.raw_dataset : self.class.dataset_from_context(context, versions: true)
+          ds = all ? self.class.raw_dataset : self.class.dataset(context, no_finalize: true)
           ds.where(record_id: record_id)
         end
         def versions(all = false)
@@ -336,12 +336,12 @@ module Sequel
 
           # Split edges between in context and out of context
           # Treat in context edges the same with or without inter branch
-          if r[:inter_branch]
+          if r[:inter]
             table_common = r[:join_table] #:connect_table
 
             # Determine if the connecting node is within the same context
             ds_common = ds.select_append(
-                Sequel.expr(r[:right_branch_id] =>
+                Sequel.expr(r[:right_branch_id] || :branch_id =>
                                 db[context_data].select(:branch_id))
                 .as(:in_context))
 
@@ -355,7 +355,7 @@ module Sequel
           end
 
           ds = ds.join_context(context_data,
-                               join_column: r[:inter_branch] && r[:right_branch_id],
+                               join_column: r[:inter] == :branch ? r[:right_branch_id] : nil,
                                table_alias: :branch_edges)
 
           branch_path_select = ds.last_branch_path_context.concat(
@@ -364,10 +364,12 @@ module Sequel
           ds = ds.where(branch_path_select => branch_path)
 
 
-          if r[:inter_branch]
+          if r[:inter]
             ds = ds.select(Sequel::SQL::ColumnAll.new(table_common),
-                           Sequel.as(:depth, :edge_branch_depth),
-                           Sequel.as(:branch_path, :edge_branch_path))
+                           Sequel.qualify(:branch_edges, :depth)
+                             .as(:edge_branch_depth),
+                           Sequel.qualify(:branch_edges, :branch_path)
+                             .as(:edge_branch_path))
 
             ds_in = ds
             ds_out = ds_base.exclude(:in_context)
@@ -424,9 +426,11 @@ module Sequel
             opts[:join_table] = join_table
           end
 
+          ver_common_opts(opts)
+
           { left: self.name.underscore,
             right: name.to_s.singularize }.each do |prefix, key_prefix|
-            ver_common_ops(opts,
+            ver_connect_opts(opts,
                            opts[:"#{prefix}_key_prefix"] ||= key_prefix,
                            prefix)
           end
@@ -435,7 +439,7 @@ module Sequel
             ctx = current_context(branch, false)
 
             ctx.not_included!(self)
-            ctx.not_included!(node) unless opts[:inter_branch]
+            ctx.not_included!(node) unless opts[:inter] == :branch
 
             h_record_id = {
                 opts[:left_record_id] => record_id,
@@ -448,7 +452,7 @@ module Sequel
             }
 
             # !!! Implement check for inter_branch
-            unless opts[:inter_branch]
+            unless opts[:inter] == :branch
               ds = self.class.db[join_table].extend(DatasetBranchContext)
                        .join_context(ctx.dataset).where(h_record_id)
               h_branch_path.each do |col, val|
@@ -463,7 +467,7 @@ module Sequel
             end
 
             h = h_record_id.merge(h_branch_path)
-            if opts[:inter_branch]
+            if opts[:inter] == :branch
               h.merge!( opts[:left_branch_id] => ctx.id,
                         opts[:right_branch_id] => node.context.id )
             else
@@ -509,8 +513,9 @@ module Sequel
 
         def ver_one_to_many(name, opts=OPTS, &block)
           opts = opts.dup
-          ver_common_ops(opts, opts[:key] || name)
-          ver_common_ops(opts, opts[:target_prefix], :target)
+          ver_common_opts(opts)
+          ver_connect_opts(opts, opts[:key] || name)
+          ver_connect_opts(opts, opts[:target_prefix], :target)
 
           opts[:dataset] = proc do |r|
             current_context.not_included_or_duplicated!(context, false)

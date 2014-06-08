@@ -21,6 +21,10 @@ class Resource < Sequel::Model
                     key: opposite, target_prefix: aspect,
                     read_only: true
   end
+
+  def to_param
+    "#{record_id}-#{branch_id}"
+  end
 end
 
 class UserResource < Resource

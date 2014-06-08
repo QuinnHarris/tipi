@@ -58,7 +58,7 @@ data = ActiveSupport::JSON.decode(json_data)
 
 Branch
 Task
-ViewBranch.public.context do
+RootBranch.root.context do
   category = Category.root.get_path(category_path)
 
   category.add_project(name: project_name) do |project|    
@@ -69,7 +69,7 @@ ViewBranch.public.context do
           raise "No #{k} attribute in #{node_h.inspect} for nodes" unless v }
       end
       raise "Duplicate node ID: #{id}" if node_map.has_key?(id)
-      node_map[id] = Step.create(name: name)
+      node_map[id] = Task.create(name: name, resource: project)
     end
     
     has_to = Set.new
@@ -85,9 +85,9 @@ ViewBranch.public.context do
     end
     
     # Make sure project depends on all nodes (indirectly)
-    (node_map.values - has_to.to_a).each do |node|
-      project.add_to(node)
-    end
+#    (node_map.values - has_to.to_a).each do |node|
+#      project.add_to(node)
+#    end
   end
 
 end

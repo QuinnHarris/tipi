@@ -120,6 +120,10 @@ describe Branch do
     pri_d = src.associations[op]
     expect(src.send(op)).to match_array(list)
     expect(src.send(op, true)).to match_array(list) if pri_d
+  end
+
+  def expect_connect_edge(src, op, list)
+    expect_connect(src, op, list)
 
     pri_i = src.associations[:"#{op}_edge"]
     expect(src.send("#{op}_edge").map(&op).compact).to match_array(list)
@@ -138,11 +142,11 @@ describe Branch do
       expect(edge.to).to eq(node_b)
       expect(edge.from).to eq(node_a)
 
-      expect_connect(node_a, :to, [node_b])
-      expect_connect(node_a, :from, [])
+      expect_connect_edge(node_a, :to, [node_b])
+      expect_connect_edge(node_a, :from, [])
 
-      expect_connect(node_b, :to, [])
-      expect_connect(node_b, :from, [node_a])
+      expect_connect_edge(node_b, :to, [])
+      expect_connect_edge(node_b, :from, [node_a])
 
       expect { node_a.remove_from(node_b) }
         .to raise_error(VersionedError, "Edge add doesn't change edge state")
@@ -155,11 +159,11 @@ describe Branch do
       node_c = Resource.create(name: 'Node C')
       expect(node_c.add_from(node_a)).to be_an_instance_of(ResourceEdge)
 
-      expect_connect(node_a, :to, [node_b, node_c])
+      expect_connect_edge(node_a, :to, [node_b, node_c])
 
       node_b.delete
 
-      expect_connect(node_a, :to, [node_c])
+      expect_connect_edge(node_a, :to, [node_c])
     end
 
     # Delete should work as its on branch A
@@ -174,13 +178,13 @@ describe Branch do
     end
 
     br_C = br_B.fork(name: 'Branch C') do
-      expect_connect(node_a, :to, [node_c])
+      expect_connect_edge(node_a, :to, [node_c])
       node_a.remove_to(node_c)
-      expect_connect(node_a, :to, [])
+      expect_connect_edge(node_a, :to, [])
     end
 
     # node_a has retained br_A context
-    expect_connect(node_a, :to, [node_b])
+    expect_connect_edge(node_a, :to, [node_b])
 
     br_D = Branch.merge(br_A, br_B, name: 'Branch D (A B Merge)') do
       # Node A
@@ -192,9 +196,9 @@ describe Branch do
       expect(node_a_A).to_not eq(node_a_B)
 
       # expect_connect fails here
-      expect_connect(node_a_A, :to, bp_match([[node_b, br_A]]))
-      expect_connect(node_a_B, :to, bp_match([[node_c, br_B]]))
-      node_a_list.each { |node_a| expect_connect(node_a, :from, []) }
+      expect_connect_edge(node_a_A, :to, bp_match([[node_b, br_A]]))
+      expect_connect_edge(node_a_B, :to, bp_match([[node_c, br_B]]))
+      node_a_list.each { |node_a| expect_connect_edge(node_a, :from, []) }
 
       # Node B
       # In this case the branch suggests it can be duplicated but node_b is removed
@@ -202,17 +206,17 @@ describe Branch do
       expect { node_b.to }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_b_list = Resource.where(name: 'Node B').all
       expect(node_b_list).to eq(bp_match([[node_b, br_A]]))
-      expect_connect(node_b_list.first, :to, [])
-      expect_connect(node_b_list.first, :from, [node_a_A])
+      expect_connect_edge(node_b_list.first, :to, [])
+      expect_connect_edge(node_b_list.first, :from, [node_a_A])
 
       # Node C
-      expect_connect(node_c, :to, [])
-      expect_connect(node_c, :from, [node_a_B])
+      expect_connect_edge(node_c, :to, [])
+      expect_connect_edge(node_c, :from, [node_a_B])
 
       # Edge in this branch
       expect(node_a_A.add_to(node_c)).to be_an_instance_of(ResourceEdge)
-      expect_connect(node_a_A, :to, [node_b, node_c])
-      expect_connect(node_c, :from, [node_a_A, node_a_B])
+      expect_connect_edge(node_a_A, :to, [node_b, node_c])
+      expect_connect_edge(node_c, :from, [node_a_A, node_a_B])
 
       # Modify
       expect { node_a.new(name: 'Node A v2') }.to raise_error(BranchContextError, /^Object Duplicated/)
@@ -224,7 +228,41 @@ describe Branch do
     end
   end
 
-  it "can make interbranch edges" do
+  it "can make inter context edges" do
+    cat_a = nil
+    br_a = Branch.create(name: 'Branch A') do
+      cat_a = Category.create(name: 'Category A')
+    end
+
+    res_a = res_b = nil
+    br_b = br_a.fork(name: 'Branch B') do
+      res_a = Resource.create(name: 'Resource A')
+      cat_a.add_resource(res_a)
+      expect_connect(cat_a, :resources, [res_a])
+    end
+
+    br_a.context do
+      expect_connect(cat_a, :resources, [res_a])
+    end
+
+    br_c = br_a.fork(name: 'Branch C') do
+      res_b = Resource.create(name: 'Resource B')
+      cat_a.add_resource(res_b)
+      # INCLUDE FEATURE TO ENUMERATE ONLY IN CONTEXT
+      expect_connect(cat_a, :resources, [res_a, res_b])
+    end
+
+    br_a.context do
+      expect_connect(cat_a, :resources, [res_a, res_b])
+    end
+
+    br_d = Branch.create(name: 'Branch D') do
+      res_c = Resource.create(name: 'Resource C')
+      expect { cat_a.add_resource(res_b) }.to raise_error(BranchContextError, /^Branch not found/)
+    end
+  end
+
+  it "can make inter branch edges" do
     node_a = node_b = node_c = resource_a = nil
     br_a = Branch.create(name: 'Branch A') do
       resource_a = Resource.create(name: 'Resource A')

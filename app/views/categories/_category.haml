@@ -1,24 +1,16 @@
 %li
-  - if category.is_a?(Category)
-    = link_to category.name, category_path(category)
+  = link_to category.name, category_path(category)
+  \-
+  = link_to 'Edit', edit_category_path(category)
+  \-
+  = link_to 'New', new_category_path(:parent => category)
+  \-
+  = link_to 'New Project', new_project_path(:category => category)
+  - unless category.children.empty?
+    %ul= render partial: 'category', collection: category.children
+  - unless category.resources.empty?
+    %ul= render partial: 'project', collection: category.resources
+  - if category.children.empty? and category.resources.empty?
     \-
-    = link_to 'Edit', edit_category_path(category)
-    \-
-    = link_to 'New', new_category_path(:parent => category)
-    \-
-    = link_to 'New Project', new_project_path(:category => category)
-    - unless category.children.empty?
-      %ul
-        = render partial: 'category', collection: category.children
-    - else
-      \-
-      = link_to 'Delete', category_path(category), :method => :delete
-  - elsif category.is_a?(Project)
-    \--
-    = link_to category.name, project_path(category) 
-    \--
-    = link_to 'Edit', edit_project_path(category)
-    \-
-    = link_to 'Clone', clone_project_path(category)
-    \-
-    = link_to 'json', project_path(category, format: :json)
+    = link_to 'Delete', category_path(category), :method => :delete
+
