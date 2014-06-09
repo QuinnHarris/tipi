@@ -6,7 +6,9 @@
     %title= content_for?(:title) ? yield(:title) : 'Tipi'
     = stylesheet_link_tag    "/typicons-font/typicons.min.css" # Typicons in public (not asset)
     = stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true
+    = stylesheet_link_tag    params[:controller], media: "all", "data-turbolinks-track" => true
     = javascript_include_tag "application", "data-turbolinks-track" => true
+    = javascript_include_tag params[:controller], "data-turbolinks-track" => true
     = javascript_include_tag "vendor/modernizr"
     = csrf_meta_tags
   %body

@@ -68,15 +68,15 @@ module Sequel
         Bignum :version, null: false, default: Sequel.function(:nextval, 'version_seq')
         primary_key [:version]
 
-        unless options[:no_branch]
-          foreign_key :branch_id, :branches, null: false
-          column      :branch_path, 'integer[]', null: false, default: '{}'
-        end
-
         unless options[:no_record]
           Integer   :record_id, null: false
 
           index :record_id
+        end
+
+        unless options[:no_branch]
+          foreign_key :branch_id, :branches, null: false
+          column      :branch_path, 'integer[]', null: false, default: '{}'
         end
          
         DateTime    :created_at, null: false
@@ -254,7 +254,10 @@ Sequel.migration do
 
     create_table :users do
       primary_key :id
-      ver_foreign_key :resource
+      # Reference record_id but not full ver_foreign_key because it is always
+      # in the global branch
+      Integer  :resource_record_id, null: false
+      #ver_foreign_key :resource
 
       # Devise
       ## Database authenticatable

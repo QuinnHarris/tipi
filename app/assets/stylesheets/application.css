@@ -16,7 +16,7 @@
  *= require font-awesome
  *= require alertify/core
  *= require alertify/default
- *= require_tree .
+ *  Do not require tree as we use controller specific assets but this gets loaded first
  *= require_self
  */
  

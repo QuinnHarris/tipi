@@ -18,8 +18,7 @@
 //= require froala_editor.min.js
 //= require dagre-d3
 //= require alertify
-//= require_tree .
-
+// Do not require tree as we use controller specific assets but this gets loaded first
 
 $(document).foundation();
 $(function(){ $(document).foundation(); });
