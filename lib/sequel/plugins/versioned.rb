@@ -164,7 +164,7 @@ module Sequel
           self[:branch_path]
         end
         def branch_path_context(ctx = nil)
-          (current_context(ctx).path_from(context) || []) + @branch_path_context
+          (current_context(ctx).path_from(context) || []) + (@branch_path_context || [])
         end
         private
         def branch_path_context=(val)
