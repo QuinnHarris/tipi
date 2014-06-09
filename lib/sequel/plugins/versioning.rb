@@ -132,7 +132,7 @@ module Sequel
 
       module InstanceMethods
         def context(&block)
-          @context.apply(&block)
+          @context && @context.apply(&block)
         end
 
         def with_this_context

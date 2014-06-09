@@ -16,11 +16,13 @@ class Node < Sequel::Model
   end
   end
 
-  def client_values
-    %w(record_id branch_path branch_id created_at name doc)
+  def client_values(no_bp = nil)
+    res = %w(record_id branch_id created_at name doc)
       .each_with_object({}) do |attr, hash|
       hash[attr] = send attr
-    end.merge('id' => version)
+    end
+    res['branch_path'] = branch_path unless no_bp
+    res.merge('id' => version)
   end
 end
 

@@ -92,7 +92,7 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       format.html { render partial: 'search', collection: @results }
-      format.json { render :json => @results.map { |n| n.client_values } }
+      format.json { render :json => @results.map { |n| n.client_values(true) } }
     end
   end
 
