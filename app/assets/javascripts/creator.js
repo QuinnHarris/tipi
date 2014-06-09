@@ -29,6 +29,8 @@ var margin = { left: 20, top: 20, bottom: 0, right: 0 };
 var svg;
 var svgg;
 var backdrop;
+
+
 function initSvg(){
 	svgNoZoom = d3.select("#svg-container")
 		.append("svg");
@@ -45,7 +47,8 @@ function initSvg(){
 			.attr('pointer-events', 'all')
 			.attr("width", '100%')
 			.attr("height", '100%')
-			.attr("fill", 'none');
+			.attr("fill", 'none')
+			.on('click', function(){ d3.select('.popup').remove();});
 			
 	svgg = svg.append("g")
 		.attr('transform', 'translate(' + margin.top +  ',' + margin.left + ')');
@@ -88,8 +91,9 @@ function render(){
 
 function format(){
 	g.eachNode( function(id, value){
-		if (typeof value.label === 'undefined'){
+		if (typeof value.label === 'undefined' || value.name !== value.nameInLabel){
 			var title = value.name;
+			value.nameInLabel = value.name;
 			var subtitle = "Subtitle";
 			var nodeIcon = 'http://www.endlessicons.com/wp-content/uploads/2013/02/wrench-icon-614x460.png';
 			value.label = 
@@ -108,9 +112,6 @@ function format(){
 
 $(document).ready(function(){
 	dataPath = $('#nodes-container').data().path;
-	$(document).on("click", function (e){
-		e.preventDefault();
-	});
 	initSvg();
 	backdrop;
 	edit();
@@ -119,6 +120,7 @@ $(document).ready(function(){
 		render();
 		setH();
 	}, 1000);
+	openSearch();
 });
 
 inter = {
@@ -185,6 +187,16 @@ inter = {
 		inter.ops.push({op: 'remove', type: 'edge', v:to, u: from});
 	},
 	changeNode: function(id, name){
+		if( name == null ) return;
+		g.node(id).name = name;
+		inter.ops.push({op: 'change', type: 'node', name: name, cid: id, id: g.node(id).id});
+	},
+	search: function(query, success){
+		$.ajax({
+			type: 'GET',
+			url: dataPath + '/search.json?q=' + query,
+			success: success
+		});
 	},
 	run: function(){
 		$.ajax({
@@ -194,7 +206,7 @@ inter = {
 			data: { 'data': JSON.stringify(inter.ops)},
 			success: function (d){
 				for (i = 0; i < d.length; i++){
-					if (d[i].type == 'node' && d[i].op == 'add'){
+					if (d[i].type == 'node' && (d[i].op == 'add' || d[i].op == 'change')){
 						g.node(d[i].cid).id = d[i].id;
 					}
 				}
@@ -251,6 +263,79 @@ $(document).on('click', '#toggle-direction', toggleOrientation);
 
 $(document).on('click', '#load-project', inter.load);
 
+$(document).on('click', '#search-nodes-icon', openSearch);
+
+$(document).on('click', '#doc-view-empty', openDoc);
+
+$(document).on('click', '#search-nodes-empty', openSearch);
+
+$(document).on('click', '#doc-view-icon', openDoc);
+
+$(document).on('click', '#collapse', collapse);
+
+$(document).on('focusout', '#doc-title', function(){
+	var newName = $('#doc-title').val();
+	var oldName = g.node(activeNode).name;
+	if (newName == oldName) return; 
+	inter.changeNode(activeNode, newName);
+	inter.run();
+	render();
+});
+$(document).bind('keyup', '#search-input', function(){
+	var query = $('#search-input').val();
+	if ( query === '' ) return;
+	var success = function(data){
+		var a = data;
+		console.log(data);
+		function rand(){var a = Math.random(), b = Math.random(); if (b>0.5) return Math.floor(2/a); else if(b<.2)return 1; else return 0;}
+		var html = '<ul>';
+		function recursiveElem(){
+			var name = a[0].name;
+			var upvotes = rand();
+			var price = '$' + (rand() + rand()/100);
+			var snippet = "yadda yadda yadda a bunch of charactors go here that represent the doc best asdfasdfa asdf asd fasdf qh lasdfj asdk;h;a sa sdjal sdkjfalskjd fa;sk";
+			var id = a[0].id;
+			var result = "<li>" + name + "</li>";
+			html +=
+			a.splice(0,1);
+			return recursiveElem();
+		}
+		recursiveElem();
+		html += '</ul>';
+		$("#search-container").html(html)
+	}
+	inter.search(query, success);
+});
+
+function openSearch(){
+	$('#doc-title').hide();
+	$('#search-input').show(500);
+	$('#side-container').show(500);
+	$('#doc').hide();
+	$('#search-container').show(500);
+	$('#search-nodes-icon').hide();
+	$('#doc-view-icon').show();
+	$('#collapse').show();
+	$('#side-empty').hide();
+}
+function openDoc(){
+	$('#doc-title').show(500);
+	$('#search-input').hide();
+	$('#side-container').show(500);
+	$('#search-container').hide();
+	$('#doc').show(500);
+	$('#search-nodes-icon').show();
+	$('#doc-view-icon').hide();
+	$('#collapse').show();
+	$('#side-empty').hide();
+}
+function collapse(){
+	$('#doc-title').hide();
+	$('#search-input').hide(500);
+	$('#side-container').hide(500);
+	$('#side-empty').show();
+}
+
 $(window).resize(setH);
 //keyboard call
 d3.select(window)
@@ -294,8 +379,12 @@ function zoom(){
 }
 
 function keydown(){
-	if (typeof activeNode !== 'undefined' && !$('.froala-element').is(':focus'))
-		switch (d3.event.keyCode) {
+	var focusTest = !(
+		$('.froala-element').is(':focus') ||
+		$('#doc-title').is(':focus') ||
+		$('#search-input').is(':focus'));
+	if (typeof activeNode !== 'undefined' && focusTest){
+		switch (d3.event.keyCode){
 	    case 8: // backspace
 	    	d3.event.preventDefault();
 	    	break;
@@ -320,15 +409,24 @@ function keydown(){
 		case 89: //y
 			break;
 		}
+	}
 }
 function nodeClick(){
-	if( typeof activeNode !== 'undefined')
-		$('#doc').editable('save');
-	activeNode = d3.event.target.id;
-	nextNodes = g.successors(activeNode);
+	if( typeof activeNode === 'undefined'){
+		activeNode = d3.event.target.id;
+		nextNodes = g.successors(activeNode);
+	}else if ( d3.event.target.id == activeNode ) return;
+	else{
+		var old_doc = g.node(activeNode).doc;
+		var new_doc = $("#doc").editable("getHTML")[0];
+		if (old_doc !== new_doc)
+			$('#doc').editable('save');
+		activeNode = d3.event.target.id;
+		nextNodes = g.successors(activeNode);
+	}
 	$('#doc').editable('setHTML', g.node(activeNode).doc);
 	d3.selectAll('.froala-box').classed("custom-box", false);
-	$('#doc-title').text(g.node(activeNode).name);
+	$('#doc-title').val(g.node(activeNode).name);
 	setH();
 	render();
 	d3.select('.popup').remove();
@@ -391,7 +489,7 @@ function contextmenu(){
     }
     
     //delete context menu on mouse exit
-    
+/*    
     popup
 	    .on('mouseleave', function(){
 	    	if (d3.event.relatedTarget.id !== id) d3.select('.popup').remove();
@@ -412,6 +510,7 @@ function contextmenu(){
 	    .on('click', function(){
 	    	d3.select('.popup').remove();
 	    });
+*/
 }
 
 //DOM interaction functions
@@ -467,7 +566,7 @@ function edit(){
 }
 
 function setH(){
-	var pad = 12;
+	var pad = 3;
 	var buffer = 5;
 	var h = {};
 	h.app = $(window).height()
@@ -475,15 +574,16 @@ function setH(){
 		- buffer;
 	h.doc = h.app
 		- $(".froala-editor.f-basic").height()
-		- $('#doc-title').height()
-		- pad
-		- buffer;
+		- $('.doc-header').height()
+		- pad;
 	h.svg = h.app
-		- $("#buttons-container").height()
-		- buffer;
+		- $("#buttons-container").height();
+	h.search = h.app;
+		
 	$('#app-container').height(h.app);
 	$('svg').height(h.svg);
 	$("#doc").height(h.doc);
+	$('#search-container').height(h.search);
 }
 
 menuData = {

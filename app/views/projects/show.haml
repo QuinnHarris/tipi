@@ -1,7 +1,18 @@
 #app-container
-  #doc-container
-    #doc-title.text-center
+  #side-container
+    %div.doc-header
+      %input#doc-title.text-center.side-header{placeholder: 'enter name'}
+      %input#search-input.text-center.side-header{placeholder: 'search for nodes'}
+      #side-buttons-container
+        %button#search-nodes-icon.fa.fa-search.fa-sm{title: 'open node search'}
+        %button#doc-view-icon.fa.fa-file.fa-sm.hidden{title: 'open doc view'}
+        %button#collapse.fa.fa-minus.fa-sm{title: 'collapse sidebar'}
     #doc.custom-box
+    #search-container
+  #side-empty
+    #empty-flex
+      %button#search-nodes-empty.fa.fa-search.fa-sm{title: 'open node search'}
+      %button#doc-view-empty.fa.fa-file.fa-sm{title: 'open doc view'}
   #nodes-container{ 'data-path' => project_path(@project) }
     #buttons-container
       #buttons-left
