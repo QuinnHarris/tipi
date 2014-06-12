@@ -14,6 +14,7 @@
 //= require jquery_ujs
 //= require turbolinks
 //= require foundation
+//= require bootstrap
 //= require d3
 //= require froala_editor.min.js
 //= require dagre-d3
