@@ -41,7 +41,7 @@ module Tipi
     # Configure whether database's rake tasks will be loaded or not
     # Defaults to true
     #config.sequel.load_database_tasks = false
-
+    config.assets.paths << Rails.root.join("app", "assets", "fonts")
     config.autoload_paths << File::join(Rails.root, 'lib')
 
     config.sequel.after_connect = proc do
