@@ -38,7 +38,7 @@ function initSvg(){
 	svg = svgNoZoom
 		.append('g')
 			.call(d3.behavior.zoom()
-				.scaleExtent([1, 10])
+				.scaleExtent([0.1, 10])
 				.on("zoom", zoom))
 			.on("dblclick.zoom", null);
 				
@@ -121,6 +121,7 @@ $(document).ready(function(){
 		setH();
 	}, 1000);
 	openSearch();
+	d3.select('.drag-bar').call(d3.behavior.drag().on('drag', dragResize));
 });
 
 inter = {
@@ -194,7 +195,7 @@ inter = {
 	search: function(query, success){
 		$.ajax({
 			type: 'GET',
-			url: dataPath + '/search.json?q=' + query,
+			url: dataPath + '/search?q=' + query,
 			success: success
 		});
 	},
@@ -217,7 +218,8 @@ inter = {
 };
 
 function addNode(name){
-	inter.addNode(name);
+	var cid = inter.addNode(name);
+	if(typeof cid == 'undefined') return;
 	inter.run();
 	render();
 }
@@ -273,40 +275,41 @@ $(document).on('click', '#doc-view-icon', openDoc);
 
 $(document).on('click', '#collapse', collapse);
 
-$(document).on('focusout', '#doc-title', function(){
+$(document).on('focusout', '#doc-title', focusoutDocName);
+
+$(document).bind('keyup', '#search-input', searchInput);
+
+function dragResize(){
+	console.log(d3.event)
+	$('#side-container').width(d3.event.x - ($(window).width() * .05));
+	setH();
+}
+
+function addFromSearch(e){
+	var ID = e.target.id;
+	var name;
+	g.eachNode(function(id, value){
+		if(value.id == ID) name = value.name;
+	});
+	addNode(name);
+}
+function searchInput(){
+	var query = $('#search-input').val();
+	if ( query === '' ) return;
+	var success = function(data){
+		$("#search-container").html(data);
+		$('.sbb.fa-plus').click(addFromSearch);
+	}
+	inter.search(query, success);
+}
+function focusoutDocName(){
 	var newName = $('#doc-title').val();
 	var oldName = g.node(activeNode).name;
 	if (newName == oldName) return; 
 	inter.changeNode(activeNode, newName);
 	inter.run();
 	render();
-});
-$(document).bind('keyup', '#search-input', function(){
-	var query = $('#search-input').val();
-	if ( query === '' ) return;
-	var success = function(data){
-		var a = data;
-		console.log(data);
-		function rand(){var a = Math.random(), b = Math.random(); if (b>0.5) return Math.floor(2/a); else if(b<.2)return 1; else return 0;}
-		var html = '<ul>';
-		function recursiveElem(){
-			var name = a[0].name;
-			var upvotes = rand();
-			var price = '$' + (rand() + rand()/100);
-			var snippet = "yadda yadda yadda a bunch of charactors go here that represent the doc best asdfasdfa asdf asd fasdf qh lasdfj asdk;h;a sa sdjal sdkjfalskjd fa;sk";
-			var id = a[0].id;
-			var result = "<li>" + name + "</li>";
-			html +=
-			a.splice(0,1);
-			return recursiveElem();
-		}
-		recursiveElem();
-		html += '</ul>';
-		$("#search-container").html(html)
-	}
-	inter.search(query, success);
-});
-
+}
 function openSearch(){
 	$('#doc-title').hide();
 	$('#search-input').show(500);
@@ -533,8 +536,8 @@ function toggleOrientation(){
 function edit(){
 	$(function(){
 		$('#doc').editable({
-			//autosave: true,
-			//autosaveInterval: 2500,
+			autosave: true,
+			autosaveInterval: 7000,
 			saveURL: dataPath + "/post_doc",
 			inlineMode: false,
 			height: '100%',
@@ -578,7 +581,8 @@ function setH(){
 		- pad;
 	h.svg = h.app
 		- $("#buttons-container").height();
-	h.search = h.app;
+	h.search = h.app
+		- $(".doc-header").height();
 		
 	$('#app-container').height(h.app);
 	$('svg').height(h.svg);
@@ -615,3 +619,20 @@ menuData = {
 			"action": null
 		}	
 ]};
+function youTimes(embed, start, end){
+	var emb = $.parseHTML(embed);
+	var src = emb[0].src;
+	function format(str){
+		var s = str.toString()
+		var n = s.search(':');
+		if(n == -1) return parseInt(s);
+		var m = s.substr(0,n);
+		var sec = s.substr(n+1, s.length);
+		sec = parseInt(m) * 60 + parseInt(sec);
+		return sec;
+	}
+	if (typeof start !== 'undefined') src += '?start=' + format(start);
+	if (typeof end !== 'undefined') src += '&end=' + format(end);
+	emb[0].src = src;
+	return emb[0];
+}

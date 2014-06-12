@@ -1,3 +1,10 @@
-%li{ 'data-id' => search.version }
-  %h3= search.name
-  %div!= search.doc
+.sc{ 'data-id' => search.version }
+  .stc
+    .st= search.name
+    .sbc
+      .sbb.fa.fa-chevron-up.fa-lg{title: 'upvotes'}
+      .sbb.fa.fa-file-o.fa-lg{title: 'view doc for this'}
+      .sbb.fa.fa-plus.fa-lg{title: 'Add this node to project', id: search.version}
+  .slc
+    =image_tag('http://global3.memecdn.com/Hot-chick_o_87354.jpg', :class=>'spic')
+    .sdoc= search.doc

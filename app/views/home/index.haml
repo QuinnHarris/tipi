@@ -1,67 +1,44 @@
-%strong.show-for-medium-up
-  %span.typcn.typcn-arrow-left Typicon left arrow test
-  %ul.large.example-orbit{"data-orbit" => ""}
-    %li
-      %img= image_tag("home_create.jpg")
-      .orbit-caption Create projects utilizing the power of the crowd-sourcing.
-    %li.active
-      %img= image_tag("home_collaborate.jpg")
-      .orbit-caption Delegate steps and import steps from anywhere on the planet
-    %li
-      %img= image_tag('home_smart.jpg')
-      .orbit-caption Learn from the successes and failures of others.
-%section.search
-  .row
-    .small-12.large-10.columns.small-centered
-      %h2 Find a Cool Restaurant!
-      %form.custom
-        .row
-          .large-3.small-12.columns
-            %label
-              Food Type:
-            %select
-              %option{value: "All"} All
-              %option{value: "Mediterranean"} Mediterranean
-              %option{value: "Chinese"} Chinese
-              %option{value: "Fast"} Fast Food
-              %option{value: "Vegetarian"} Vegetarian
-          .large-3.small-6.columns
-            %label
-              Price Range:
-            %select
-              %option{value: "0-5"} $0-$5
-              %option{value: "5-10"} $5-$10
-              %option{value: "10-15"} $10-$15
-              %option{value: "15-20"} $15-$20
-              %option{value: "20-25"} $20-$25
-              %option{value: "25-30"} $25-$30
-              %option{value: "more"} more than $30
-          .large-3.small-6.columns
-            %label
-              Location:
-            %select
-              %option{value: "mile"} near me
-              %option{value: "2-mile"} 2 miles
-              %option{value: "5-mile"} 5 miles
-              %option{value: "25-mile"} 25 miles
-              %option{value: "more-mile"} more
-          .large-3.small-12.columns.expand
-            %a.button.expand{href: "#"} Search
-
-      %h2 Coded the ruby on rails way
-      %p In something real the options arrays would probably be pulled from the db in the controller
-      %p Refer to http://guides.rubyonrails.org/form_helpers.html
-      %form.custom
-        .row
-          .large-3.small-12.columns
-            %label Food Type:
-            = select_tag(:type, options_for_select(%w(All Mediterranean Chinese Fast Vegetarian)))
-          .large-3.small-6.columns
-            %label Price Range:
-            - l = (0..6).map { |i| i*5 }
-            = select_tag(:price, options_for_select(l[0..-2].zip(l[1..-1]).map { |a,b| ["$#{a}-$#{b}", "#{a}-#{b}"] } + [['more than $30', 'more']]))
-          .large-3.small-6.columns
-            %label Location:
-            = select_tag(:location, options_for_select(%w(near 2\ miles 5\ miles 25\ miles more).map { |s| /(\d+)?(.+)/ === s; [s,  $1 || $2] }))
-          .large-3.small-12.columns.expand
-            %a.button.expand{href: "#"} Search
+.devider-top
+.row-fluid.smart-landing-wrap
+  .span6
+    .wrap-left
+      %h1
+        %span.rw-top Are you looking for awesome designs
+        %span.rw-mid Smart
+        %span.rw-bottom Anytime?
+  .span6
+    .wrap-right
+      %h1
+        %span.rw-top Display an interesting intro
+        %span.rw-mid Landing
+        %span.rw-bottom Yeah, it would!
+.row-fluid.wrap-full.appear
+  .span8.full-left
+    %h2
+      %span A great way to make awesome design!
+      %a.btn.btn-large.btn-primary{href: "index.html"} Sign up now! →
+  .span4.full-right
+.row-fluid.thumb-container.appear
+  .span8.offset2
+    %ul.thumbnails
+      %li.span3
+        .smart-thumb
+          %a{href: "#popular"}
+            %h2 Popular
+            %p Lorem ipsum dolor sit amet.
+      %li.span3
+        .smart-thumb
+          %a{href: "#feature"}
+            %h2 Feature
+            %p Lorem ipsum dolor sit amet.
+      %li.span3
+        .smart-thumb
+          %a{href: "#service"}
+            %h2 Service
+            %p Lorem ipsum dolor sit amet.
+      %li.span3
+        .smart-thumb
+          %a{href: "#portofolio"}
+            %h2 Portofolio
+            %p Lorem ipsum dolor sit amet.
+.devider-bottom

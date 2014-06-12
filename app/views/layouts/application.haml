@@ -3,7 +3,7 @@
   %head
     %meta{ charset: 'utf-8' }
     %meta{ name: 'viewport', content: "width=device-width, initial-scale=1.0" }
-    %title= content_for?(:title) ? yield(:title) : 'Tipi'
+    %title= content_for?(:title) ? yield(:title) : 'Pitri.net'
     = stylesheet_link_tag    "/typicons-font/typicons.min.css" # Typicons in public (not asset)
     = stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true
     = stylesheet_link_tag    params[:controller], media: "all", "data-turbolinks-track" => true
@@ -20,7 +20,7 @@
       %ul.title-area
         %li.name
           %h1
-            = link_to 'Tipi', root_path
+            = link_to 'Pitri.net', root_path
         %li.toggle-topbar.menu-icon
           %a{href:"#"}
       %section.top-bar-section
