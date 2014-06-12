@@ -58,10 +58,13 @@ data = ActiveSupport::JSON.decode(json_data)
 
 Branch
 Task
-RootBranch.root.context do
+
+root_user = User.where(id: 1).first
+
+RootBranch.root.context(user: root_user) do
   category = Category.root.get_path(category_path)
 
-  category.add_project(name: project_name) do |project|    
+  category.add_project(name: project_name) do |project|
     node_map = {}
     data['nodes'].each do |node_h|
       id, name = %w(id name).map do |k|
@@ -71,7 +74,7 @@ RootBranch.root.context do
       raise "Duplicate node ID: #{id}" if node_map.has_key?(id)
       node_map[id] = Task.create(name: name, resource: project)
     end
-    
+
     has_to = Set.new
     data['edges'].each do |edge_h|
       from, to = %w(from to).map do |k|
@@ -83,6 +86,9 @@ RootBranch.root.context do
       from.add_to(to)
       has_to << to
     end
+
+    # Grant permission to everyone
+    UserResource.public.add_to(project)
     
     # Make sure project depends on all nodes (indirectly)
 #    (node_map.values - has_to.to_a).each do |node|

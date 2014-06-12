@@ -117,6 +117,56 @@ end
 
 Sequel.migration do
   up do
+    create_table :users do
+      primary_key :id
+      # Each user has one UserResource record (many versions).
+      Integer     :resource_record_id, null: false
+
+      # Devise
+      ## Database authenticatable
+      String      :email,              null: false, default: ''
+      index       :email,              unique: true
+      String      :encrypted_password, null: false, default: ''
+
+      ## Recoverable
+      String      :reset_password_token
+      index       :reset_password_token, unique: true
+      DateTime    :reset_password_sent_at
+
+      ## Rememberable
+      DateTime :remember_created_at
+
+      ## Trackable
+      Integer  :sign_in_count,          null: false, default: 0
+      DateTime :current_sign_in_at
+      DateTime :last_sign_in_at
+      String   :current_sign_in_ip
+      String   :last_sign_in_ip
+
+      ## Confirmable
+      String   :confirmation_token
+      index    :confirmation_token,     unique: true
+      DateTime :confirmed_at
+      DateTime :confirmation_sent_at
+      String   :unconfirmed_email # Only if using reconfirmable
+
+      ## Lockable
+      # Only if lock strategy is :failed_attempts
+      Integer  :failed_attempts,        null: false, default: 0
+      String   :unlock_token # Only if unlock strategy is :email or :both
+      index    :unlock_token,           unique: true
+      DateTime :locked_at
+
+      ## OmniAuth
+      String   :provider
+      String   :uid
+      String   :name
+
+      DateTime      :created_at
+      DateTime      :updated_at
+    end
+
+
     # Global version sequence
     create_sequence(:version_seq)
 
@@ -184,46 +234,66 @@ Sequel.migration do
         FOR EACH ROW EXECUTE PROCEDURE cycle_test();
     )
 
+    run "CREATE EXTENSION hstore"
+
     create_version_table :resources do
       String        :type, null: false
+      foreign_key   :user_id, :users, null: false
 
       String        :name, null: false
       String        :doc,  text: true
+      column        :data, :hstore
     end
     full_text_search :resources, { :name => 'A', :doc => 'B' }
 
     create_many_to_many_version_table(:resource_edges, src_table: :resources) do
-   #   String        :type, null: false
-      String        :data
+      String        :type, null: false
+      foreign_key   :user_id, :users, null: false
+
+      Integer       :access, default: 2147483647
     end
 
     create_version_table :tasks do
-      ver_foreign_key :resource
-
       String        :type, null: false
+      foreign_key   :user_id, :users, null: false
+
+      ver_foreign_key :resource
 
       String        :name, null: false
       String        :doc,  text: true
+      column        :data, :hstore
     end
     full_text_search :tasks, { :name => 'A', :doc => 'B' }
 
-    create_many_to_many_version_table(:task_edges, src_table: :tasks)
-    create_many_to_many_version_table(:task_edgers, src_table: :tasks, inter_branch: true)
+    create_many_to_many_version_table(:task_edges, src_table: :tasks) do
+      foreign_key   :user_id, :users, null: false
+    end
+    create_many_to_many_version_table(:task_edgers, src_table: :tasks, inter_branch: true) do
+      foreign_key   :user_id, :users, null: false
+    end
 
 
     create_version_table :categories do
+      foreign_key   :user_id, :users, null: false
+
       String        :name, null: false
       String        :doc,  text: true
     end
     full_text_search :categories, { :name => 'A', :doc => 'B' }
 
-    create_many_to_many_version_table(:category_edges, src_table: :categories)
+    create_many_to_many_version_table(:category_edges, src_table: :categories) do
+      foreign_key   :user_id, :users, null: false
+    end
+
     create_many_to_many_version_table(:category_resource,
                                       src_table: :categories,
-                                      dst_table: :resources)
+                                      dst_table: :resources) do
+      foreign_key   :user_id, :users, null: false
+    end
 
     create_table :instances do
       primary_key :id
+      foreign_key   :user_id, :users, null: false
 
       ver_foreign_key :resource, version: true
       foreign_key :branch_id, :branches
@@ -237,70 +307,21 @@ Sequel.migration do
     end
 
     create_table :instance_edges do
-      foreign_key   :predecessor_id, :branches
-      foreign_key   :successor_id, :branches
+      foreign_key   :predecessor_id, :instances
+      foreign_key   :successor_id, :instances
       primary_key   [:successor_id, :predecessor_id]
 
       check { predecessor_id != successor_id }
     end
 
     create_table :actions do
+      foreign_key   :user_id, :users, null: false
+
       foreign_key :instance_id, :instances
       ver_foreign_key :task, version: true
       primary_key [:instance_id, :task_version, :task_branch_path]
 
       String      :state
-    end
-
-    create_table :users do
-      primary_key :id
-      # Reference record_id but not full ver_foreign_key because it is always
-      # in the global branch
-      Integer  :resource_record_id, null: false
-      #ver_foreign_key :resource
-
-      # Devise
-      ## Database authenticatable
-      String      :email,              null: false, default: ''
-      index       :email,              unique: true
-      String      :encrypted_password, null: false, default: ''
-
-      ## Recoverable
-      String      :reset_password_token
-      index       :reset_password_token, unique: true
-      DateTime    :reset_password_sent_at
-
-      ## Rememberable
-      DateTime :remember_created_at
-
-      ## Trackable
-      Integer  :sign_in_count,          null: false, default: 0
-      DateTime :current_sign_in_at
-      DateTime :last_sign_in_at
-      String   :current_sign_in_ip
-      String   :last_sign_in_ip
-
-      ## Confirmable
-      String   :confirmation_token
-      index    :confirmation_token,     unique: true
-      DateTime :confirmed_at
-      DateTime :confirmation_sent_at
-      String   :unconfirmed_email # Only if using reconfirmable
-
-      ## Lockable
-      # Only if lock strategy is :failed_attempts
-      Integer  :failed_attempts,        null: false, default: 0
-      String   :unlock_token # Only if unlock strategy is :email or :both
-      index    :unlock_token,           unique: true
-      DateTime :locked_at
-
-      ## OmniAuth
-      String   :provider
-      String   :uid
-      String   :name
-
-      DateTime      :created_at
-      DateTime      :updated_at
     end
   end
 end

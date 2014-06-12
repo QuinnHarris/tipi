@@ -11,14 +11,16 @@ class User < Sequel::Model
   # Main View for user
   plugin :version_associations
 
-  # References UserResource always in the Global branch.
   ver_many_to_one :resource
   def resource_branch_path; []; end
+
+  one_to_many :resources
 
   # Called by devise when new User object is created
   def self.new_with_session(params, session)
     super.tap do |user|
-      user.resource = UserResource.create(name: 'User', context: RootBranch.root)
+      # Temporarily set to 0 but will be reset in registrations_controller
+      user.resource_record_id = 0
     end
   end
 end

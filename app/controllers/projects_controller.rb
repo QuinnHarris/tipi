@@ -13,7 +13,7 @@ class ProjectsController < ApplicationController
   end
 
   def create
-    RootBranch.root.context do
+    RootBranch.root.context(user: current_user) do
       category = Category.where(version: params[:category][:version]).first
       @project = category.add_project(params[:project])
     end
@@ -25,9 +25,10 @@ class ProjectsController < ApplicationController
   private
   def set_project
     record_id, branch_id = params[:id].split('-')
-    branch = Branch.where(id: branch_id).first
-    @project = Project.dataset(branch).where(record_id: Integer(record_id)).first
-    raise "Project not found" unless @project
+    Branch.context(Integer(branch_id), user: current_user) do
+      @project = Project.where(record_id: Integer(record_id)).first
+      raise "Project not found" unless @project
+    end
   end
   public
 
@@ -134,7 +135,7 @@ class ProjectsController < ApplicationController
   # a json mime type without .json is likely to work.
   def show
     respond_to do |format|
-      format.html {  }
+      format.html { @readonly = !user_signed_in? }
       format.json do
         @edges = []
 

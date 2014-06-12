@@ -1,6 +1,10 @@
 require 'spec_helper'
 
 describe Branch do
+  before do
+    @user = create(:user)
+  end
+
   context "with base object" do
     before do
       @branch = Branch.create(name: 'Base')
@@ -8,34 +12,33 @@ describe Branch do
     end
 
     it "node object has activemodel bahavior" do
-      node_a = Resource.new(name: 'Node A', branch: @branch)
+      node_a = Resource.new(name: 'Node A', branch: @branch, user: @user)
       expect(node_a.persisted?).to be_false
       expect(node_a.to_key).to be_nil
       node_a.save
       expect(node_a.persisted?).to be_true
       expect(keys = node_a.to_key).not_to be_nil
       
-      node_b = node_a.new(branch: @branch)
+      node_b = node_a.new(branch: @branch, user: @user)
       expect(node_b.persisted?).to be_true
       expect(node_b.to_key).to eq(keys)
     end
-  end
 
-  # Use branch pass interface
-  it "can add and remove nodes" do
-    branch = Branch.create(name: 'Base')
-    node_a = Resource.create(name: 'Node A', branch: branch)
-    expect(node_a).to be_an_instance_of(Resource)
-    expect(node_a.branch).to eq(branch)
+    # Use branch pass interface
+    it "can add and remove nodes" do
+      node_a = Resource.create(name: 'Node A', branch: @branch, user: @user)
+      expect(node_a).to be_an_instance_of(Resource)
+      expect(node_a.branch).to eq(@branch)
 
-    expect(Resource.dataset(branch).all).to eq([node_a])
-    node_a_delete = node_a.delete(branch: branch)
-    expect(node_a_delete).to be_an_instance_of(Resource)
-    expect(node_a_delete.version).to be > node_a.version
-    expect(Resource.dataset(branch).all).to eq([])
-    
-    expect(Resource.dataset(Sequel::Plugins::Branch::Context.new(branch, node_a.version)).all).
-      to eq([node_a])
+      expect(Resource.dataset(@branch).all).to eq([node_a])
+      node_a_delete = node_a.delete(branch: @branch, user: @user)
+      expect(node_a_delete).to be_an_instance_of(Resource)
+      expect(node_a_delete.version).to be > node_a.version
+      expect(Resource.dataset(@branch).all).to eq([])
+
+      expect(Resource.dataset(Sequel::Plugins::Branch::Context.new(@branch, node_a.version)).all).
+          to eq([node_a])
+    end
   end
 
   def bp_match(array)
@@ -48,20 +51,20 @@ describe Branch do
   it "can inherit branch views" do
     node_a = node_b = node_c = nil
 
-    br_a = Branch.create(name: 'Branch A') do
+    br_a = Branch.create(name: 'Branch A', user: @user) do
       node_a = Resource.create(name: 'Node A')
     end
 
-    br_b = br_a.fork(name: 'Branch B') do
+    br_b = br_a.fork(name: 'Branch B', user: @user) do
       node_b = Resource.create(name: 'Node B')
       expect(Resource.all).to match_array([node_a, node_b])
     end
 
-    br_a.context do
+    br_a.context(user: @user) do
       expect(Resource.all).to match_array([node_a])
     end
 
-    br_c = br_b.fork(name: 'Branch C', version_lock: true) do
+    br_c = br_b.fork(name: 'Branch C', version_lock: true, user: @user) do
       expect(Resource.all).to match_array([node_a, node_b])
       node_a_del = node_a.delete
       expect(node_a_del.context).to eq(Sequel::Plugins::Branch::Context.current)
@@ -70,7 +73,7 @@ describe Branch do
       expect { br_a.context { } }.to raise_error(BranchContextError, /^Branch found.+but/)
     end
 
-    br_b.context do
+    br_b.context(user: @user) do
       br_a.context do
         node_c = Resource.create(name: 'Node C')
         expect(Resource.all).to match_array([node_a, node_c])
@@ -81,7 +84,7 @@ describe Branch do
       expect { Resource.create(name: 'Fail', branch: br_c) }.to raise_error(BranchContextError, /^Branch not found for/)
     end
 
-    br_c.context do
+    br_c.context(user: @user) do
       expect(Resource.all).to match_array([node_b])
 
       node_b_del = node_b.delete
@@ -97,7 +100,7 @@ describe Branch do
     end
 
     # Merge Tests
-    br_d = Branch.merge(br_a, br_b, name: 'Merge AB') do
+    br_d = Branch.merge(br_a, br_b, name: 'Merge AB', user: @user) do
       expect(Resource.all)
         .to match_array(bp_match([[node_a, br_a],
                                   [node_a, br_b],
@@ -132,7 +135,7 @@ describe Branch do
 
   it "can link nodes with edges" do
     node_a = node_b = node_c = nil
-    br_A = Branch.create(name: 'Branch A') do
+    br_A = Branch.create(name: 'Branch A', user: @user) do
       node_a = Resource.create(name: 'Node A')
       node_b = Resource.create(name: 'Node B')
 
@@ -155,7 +158,7 @@ describe Branch do
         .to raise_error(VersionedError, "Edge add doesn't change edge state")
     end
 
-    br_B = br_A.fork(name: 'Branch B') do
+    br_B = br_A.fork(name: 'Branch B', user: @user) do
       node_c = Resource.create(name: 'Node C')
       expect(node_c.add_from(node_a)).to be_an_instance_of(ResourceEdge)
 
@@ -167,17 +170,17 @@ describe Branch do
     end
 
     # Delete should work as its on branch A
-    br_A.context do
+    br_A.context(user: @user) do
       node_b.delete
       raise Sequel::Rollback
     end
 
-    br_B.context do
+    br_B.context(user: @user) do
       expect { node_b.delete }
         .to raise_error(VersionedError, "Delete with existing deleted record")
     end
 
-    br_C = br_B.fork(name: 'Branch C') do
+    br_C = br_B.fork(name: 'Branch C', user: @user) do
       expect_connect_edge(node_a, :to, [node_c])
       node_a.remove_to(node_c)
       expect_connect_edge(node_a, :to, [])
@@ -186,7 +189,7 @@ describe Branch do
     # node_a has retained br_A context
     expect_connect_edge(node_a, :to, [node_b])
 
-    br_D = Branch.merge(br_A, br_B, name: 'Branch D (A B Merge)') do
+    br_D = Branch.merge(br_A, br_B, name: 'Branch D (A B Merge)', user: @user) do
       # Node A
       expect { node_a.to }.to raise_error(BranchContextError, /^Object Duplicated/)
       node_a_list = Resource.where(name: 'Node A').all
@@ -230,33 +233,33 @@ describe Branch do
 
   it "can make inter context edges" do
     cat_a = nil
-    br_a = Branch.create(name: 'Branch A') do
+    br_a = Branch.create(name: 'Branch A', user: @user) do
       cat_a = Category.create(name: 'Category A')
     end
 
     res_a = res_b = nil
-    br_b = br_a.fork(name: 'Branch B') do
+    br_b = br_a.fork(name: 'Branch B', user: @user) do
       res_a = Resource.create(name: 'Resource A')
       cat_a.add_resource(res_a)
       expect_connect(cat_a, :resources, [res_a])
     end
 
-    br_a.context do
+    br_a.context(user: @user) do
       expect_connect(cat_a, :resources, [res_a])
     end
 
-    br_c = br_a.fork(name: 'Branch C') do
+    br_c = br_a.fork(name: 'Branch C', user: @user) do
       res_b = Resource.create(name: 'Resource B')
       cat_a.add_resource(res_b)
       # INCLUDE FEATURE TO ENUMERATE ONLY IN CONTEXT
       expect_connect(cat_a, :resources, [res_a, res_b])
     end
 
-    br_a.context do
+    br_a.context(user: @user) do
       expect_connect(cat_a, :resources, [res_a, res_b])
     end
 
-    br_d = Branch.create(name: 'Branch D') do
+    br_d = Branch.create(name: 'Branch D', user: @user) do
       res_c = Resource.create(name: 'Resource C')
       expect { cat_a.add_resource(res_b) }.to raise_error(BranchContextError, /^Branch not found/)
     end
@@ -264,35 +267,35 @@ describe Branch do
 
   it "can make inter branch edges" do
     node_a = node_b = node_c = resource_a = nil
-    br_a = Branch.create(name: 'Branch A') do
+    br_a = Branch.create(name: 'Branch A', user: @user) do
       resource_a = Resource.create(name: 'Resource A')
       node_a = Task.create(name: 'Node A', resource: resource_a)
     end
 
-    br_b = Branch.create(name: 'Branch B') do
+    br_b = Branch.create(name: 'Branch B', user: @user) do
       resource_b = Resource.create(name: 'Resource B')
       node_b = Task.create(name: 'Node B', resource: resource_b)
       node_b.add_from_inter(node_a)
       expect(node_b.from_inter).to eq([node_a])
     end
 
-    br_a.context do
+    br_a.context(user: @user) do
       expect(node_a.to_inter).to eq([node_b])
       node_c = Task.create(name: 'Node C', resource: resource_a)
       node_a.add_to_inter(node_c)
       expect(node_a.to_inter).to match_array([node_b, node_c])
     end
 
-    br_c = br_a.fork(name: 'Branch C (of A)') do
+    br_c = br_a.fork(name: 'Branch C (of A)', user: @user) do
       node_c.delete
       expect(node_a.to_inter).to eq([node_b])
     end
 
-    br_a.context do
+    br_a.context(user: @user) do
       expect(node_a.to_inter).to match_array([node_b, node_c])
     end
 
-    br_d = Branch.merge(br_b, br_c, name: 'Branch D (of B C)') do
+    br_d = Branch.merge(br_b, br_c, name: 'Branch D (of B C)', user: @user) do
       node_b.delete
       expect(node_a.to_inter).to eq([])
     end

@@ -2,6 +2,8 @@ class Task < Sequel::Model
   plugin :single_table_inheritance, :type
   plugin :versioned
 
+  many_to_one :user
+
   ver_many_to_one :resource
 
   # Probably need association that can find instances of this and all older

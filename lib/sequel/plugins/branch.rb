@@ -48,11 +48,12 @@ module Sequel
         def fork(options = {}, &block)
           version = options.delete(:version_lock)
           klass = options.delete(:class) || self.class
+          user = options.delete(:user)
           raise "Must be Branch class: #{klass}" unless klass <= ::Branch
           db.transaction do
             o = klass.create(options)
             add_successor(o, version)
-            Context.new(o).apply(&block)
+            Context.new(o).apply(user: user, &block)
             o
           end
         end
@@ -86,9 +87,10 @@ module Sequel
         # Special create method that accepts a block within the context of the created block
         def create(values = {}, &block)
           if block_given?
+            user = values.delete(:user)
             db.transaction do
               o = super(values, &nil)
-              o.context(&block)
+              o.context(user: user, &block)
               o
             end
           else
@@ -103,12 +105,13 @@ module Sequel
         def merge(*args, &block)
           options = args.pop
           version = options.delete(:version_lock)
+          user = options.delete(:user)
           db.transaction do
             o = create(options)
             [args].flatten.each do |p|
               p.add_successor(o, version)
             end
-            o.context(&block)
+            o.context(user: user, &block)
             o
           end
         end

@@ -2,21 +2,11 @@
 // They will automatically be included in application.css.
 // You can use Sass (SCSS) here: http://sass-lang.com/
 /* Add imports of custom sass/scss files here */
-@import url('..assets/fonts/font.css');
+@import 'font.css';
 
-body {
-    background: url('..assets/img/background.png');
+.body {
+    background: url('images/background.png');
     font-family: 'MisoRegular';
-}
-
-.devider-top{
-    position: absolute;
-    left: 0;
-    top: 0;
-    display: block;
-    width: 100%;
-    min-height: 5px;
-    background: #348CD6;
 }
 
 .devider-bottom{
@@ -40,6 +30,7 @@ body {
 
 .smart-landing-wrap{
   margin-top: 60px;
+  display: block;
   font-family: 'MisoBold';
 }
 

@@ -8,7 +8,7 @@ class Sequel::Plugins::Branch::Context
     super
   end
 
-  def initialize(branch, version = nil)
+  def initialize(branch, version = nil, user = nil)
     if branch.is_a?(Integer)
       @id = branch
     elsif branch.is_a?(Branch)
@@ -18,8 +18,9 @@ class Sequel::Plugins::Branch::Context
       raise "Unknown argument: #{branch.inspect}"
     end
     @version = version
+    @user = user
   end
-  attr_reader :id, :version
+  attr_reader :id, :version, :user
 
   def branch_nil; @branch; end
 
@@ -107,15 +108,24 @@ class Sequel::Plugins::Branch::Context
 
   def apply(opts = {})
     return self unless block_given?
+    opts = opts.dup
+    user_list = [opts.delete(:user), @user,
+                 self.class.current! && self.class.current!.user]
+    the_user = user_list.compact.uniq
+    if the_user.length > 1
+      raise "More than one user specified: #{user_list.inspect}"
+    end
+    @user = the_user.first
     begin
+      @@context_stack.push(self)
       Branch.db.transaction(opts) do
-        @@context_stack.push(self)
         table # Generate context table
 
         yield branch
       end
     ensure
-      raise "WTF" if self != @@context_stack.last
+      raise "Context Stack Empty" if @@context_stack.empty?
+      raise "Top of stack context mismatch" if self != @@context_stack.last
       table_clear! # !!!Remove table reference incase droped when transaction is complete.  Fix this
       @@context_stack.pop
     end
