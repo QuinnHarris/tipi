@@ -13,7 +13,7 @@
     #empty-flex
       %button#search-nodes-empty.fa.fa-search.fa-sm{title: 'open node search'}
       %button#doc-view-empty.fa.fa-file.fa-sm{title: 'open doc view'}
-  #nodes-container{ 'data-path' => project_path(@project) }
+  #nodes-container{ 'data-path' => project_path(@project), 'data-readonly' => @readonly ? 'true' : 'false' }
     #buttons-container
       #buttons-left
         %button#add-node.node-button.fa.fa-plus.fa-lg{title: 'Add a new Node'}

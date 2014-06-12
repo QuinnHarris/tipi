@@ -80,6 +80,14 @@ module Sequel
             end
           end
 
+          opts[:setter] = proc do |obj|
+            #opts = association_reflections[name]
+            send("#{name}_record_id=", obj.record_id)
+            if respond_to?("#{name}_branch_path}=")
+              send("#{name}_branch_path}=", obj.branch_path)
+            end
+          end
+
           many_to_one(name, opts, &block)
         end
 

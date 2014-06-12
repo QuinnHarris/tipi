@@ -128,11 +128,11 @@ module Sequel
 
 
       module InstanceMethods
-        def context(&block)
+        def context(user = nil, &block)
           unless ctx = @context
             ctx = Branch::Context.get(branch)
           end
-          ctx.apply(&block)
+          ctx.apply(user: user, &block)
         end
 
         def with_this_context
@@ -183,7 +183,7 @@ module Sequel
         end
 
         def inspect
-          "#<#{model.name} ctx=#{@context.id},#{@context.version},[#{@branch_path_context.join(',')}] @values=#{inspect_values}>"
+          "#<#{model.name} ctx=#{@context.id},#{@context.version},#{@context.user},[#{@branch_path_context.join(',')}] @values=#{inspect_values}>"
         end
 
         def versions_dataset(all = false)
@@ -215,8 +215,16 @@ module Sequel
 
           values = values.dup
           values.delete(:context)
-          values[:branch] = @context.branch_nil
-          values[:branch_id] = @context.id
+          if self.class.columns.include?(:branch_id) # Kludge for inter branch edges
+            values[:branch] = @context.branch_nil
+            values[:branch_id] = @context.id
+          end
+
+          raise "No user" unless @context.user or values[:user]
+          if @context.user and values[:user] and @context.user != values[:user]
+            raise "Users are different"
+          end
+          values[:user] ||= @context.user
 
           super values
         end
@@ -471,13 +479,18 @@ module Sequel
               h.merge!( opts[:left_branch_id] => ctx.id,
                         opts[:right_branch_id] => node.context.id )
             else
-              h.merge!( :branch_id => ctx.branch.id )
+              h.merge!( :branch_id => ctx.id ) unless join_class
             end
 
             h.merge!(:created_at => created_at || self.class.dataset.current_datetime,
                      :deleted => delete ? true : false)
 
-            join_class ? join_class.create(h) : self.class.db[join_table].insert(h)
+            if join_class
+              h.merge!(type: join_class.to_s) if join_class.columns.include?(:type)
+              join_class.create(h.merge(:context => ctx))
+            else
+              self.class.db[join_table].insert(h.merge(:user_id => ctx.user.id))
+            end
           end
 
           opts[:remover] = proc do |node, branch = nil, created_at = nil|

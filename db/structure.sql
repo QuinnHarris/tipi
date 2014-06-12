@@ -23,6 +23,20 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 
 
+--
+-- Name: hstore; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS hstore WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION hstore; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION hstore IS 'data type for storing sets of (key, value) pairs';
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -116,6 +130,7 @@ SET default_with_oids = false;
 --
 
 CREATE TABLE actions (
+    user_id integer NOT NULL,
     instance_id integer NOT NULL,
     task_version bigint NOT NULL,
     task_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
@@ -187,10 +202,11 @@ CREATE SEQUENCE version_seq
 
 CREATE TABLE categories (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    record_id integer NOT NULL,
     branch_id integer NOT NULL,
     branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    record_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
+    user_id integer NOT NULL,
     name text NOT NULL,
     doc text,
     deleted boolean DEFAULT false NOT NULL,
@@ -230,6 +246,7 @@ CREATE TABLE category_edges (
     from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     to_record_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    user_id integer NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -247,6 +264,7 @@ CREATE TABLE category_resource (
     category_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     resource_record_id integer NOT NULL,
     resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    user_id integer NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -268,6 +286,7 @@ CREATE TABLE instance_edges (
 
 CREATE TABLE instances (
     id integer NOT NULL,
+    user_id integer NOT NULL,
     resource_version bigint NOT NULL,
     resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     branch_id integer,
@@ -311,7 +330,9 @@ CREATE TABLE resource_edges (
     from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     to_record_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    data text,
+    type text NOT NULL,
+    user_id integer NOT NULL,
+    access integer DEFAULT 2147483647,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -322,13 +343,15 @@ CREATE TABLE resource_edges (
 
 CREATE TABLE resources (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    record_id integer NOT NULL,
     branch_id integer NOT NULL,
     branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    record_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
     type text NOT NULL,
+    user_id integer NOT NULL,
     name text NOT NULL,
     doc text,
+    data hstore,
     deleted boolean DEFAULT false NOT NULL,
     tsv tsvector
 );
@@ -375,6 +398,7 @@ CREATE TABLE task_edgers (
     to_record_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     to_branch_id integer NOT NULL,
+    user_id integer NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -392,6 +416,7 @@ CREATE TABLE task_edges (
     from_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     to_record_id integer NOT NULL,
     to_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
+    user_id integer NOT NULL,
     deleted boolean DEFAULT false NOT NULL
 );
 
@@ -402,15 +427,17 @@ CREATE TABLE task_edges (
 
 CREATE TABLE tasks (
     version bigint DEFAULT nextval('version_seq'::regclass) NOT NULL,
+    record_id integer NOT NULL,
     branch_id integer NOT NULL,
     branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    record_id integer NOT NULL,
     created_at timestamp without time zone NOT NULL,
+    type text NOT NULL,
+    user_id integer NOT NULL,
     resource_record_id integer NOT NULL,
     resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
-    type text NOT NULL,
     name text NOT NULL,
     doc text,
+    data hstore,
     deleted boolean DEFAULT false NOT NULL,
     tsv tsvector
 );
@@ -442,7 +469,6 @@ ALTER SEQUENCE tasks_record_id_seq OWNED BY tasks.record_id;
 CREATE TABLE users (
     id integer NOT NULL,
     resource_record_id integer NOT NULL,
-    resource_branch_path integer[] DEFAULT '{}'::integer[] NOT NULL,
     email text DEFAULT ''::text NOT NULL,
     encrypted_password text DEFAULT ''::text NOT NULL,
     reset_password_token text,
@@ -804,13 +830,6 @@ CREATE UNIQUE INDEX users_reset_password_token_index ON users USING btree (reset
 
 
 --
--- Name: users_resource_record_id_resource_branch_path_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX users_resource_record_id_resource_branch_path_index ON users USING btree (resource_record_id, resource_branch_path);
-
-
---
 -- Name: users_unlock_token_index; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -862,6 +881,14 @@ ALTER TABLE ONLY actions
 
 
 --
+-- Name: actions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY actions
+    ADD CONSTRAINT actions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- Name: branch_relations_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -886,11 +913,27 @@ ALTER TABLE ONLY categories
 
 
 --
+-- Name: categories_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY categories
+    ADD CONSTRAINT categories_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- Name: category_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_edges
     ADD CONSTRAINT category_edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: category_edges_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY category_edges
+    ADD CONSTRAINT category_edges_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
 
 
 --
@@ -902,11 +945,19 @@ ALTER TABLE ONLY category_resource
 
 
 --
+-- Name: category_resource_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY category_resource
+    ADD CONSTRAINT category_resource_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- Name: instance_edges_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY instance_edges
-    ADD CONSTRAINT instance_edges_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES branches(id);
+    ADD CONSTRAINT instance_edges_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES instances(id);
 
 
 --
@@ -914,7 +965,7 @@ ALTER TABLE ONLY instance_edges
 --
 
 ALTER TABLE ONLY instance_edges
-    ADD CONSTRAINT instance_edges_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES branches(id);
+    ADD CONSTRAINT instance_edges_successor_id_fkey FOREIGN KEY (successor_id) REFERENCES instances(id);
 
 
 --
@@ -934,6 +985,14 @@ ALTER TABLE ONLY instances
 
 
 --
+-- Name: instances_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY instances
+    ADD CONSTRAINT instances_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- Name: resource_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -942,11 +1001,27 @@ ALTER TABLE ONLY resource_edges
 
 
 --
+-- Name: resource_edges_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY resource_edges
+    ADD CONSTRAINT resource_edges_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- Name: resources_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY resources
     ADD CONSTRAINT resources_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: resources_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY resources
+    ADD CONSTRAINT resources_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
 
 
 --
@@ -966,11 +1041,27 @@ ALTER TABLE ONLY task_edgers
 
 
 --
+-- Name: task_edgers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY task_edgers
+    ADD CONSTRAINT task_edgers_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- Name: task_edges_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY task_edges
     ADD CONSTRAINT task_edges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id);
+
+
+--
+-- Name: task_edges_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY task_edges
+    ADD CONSTRAINT task_edges_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
 
 
 --
@@ -982,7 +1073,15 @@ ALTER TABLE ONLY tasks
 
 
 --
+-- Name: tasks_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY tasks
+    ADD CONSTRAINT tasks_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');
+INSERT INTO "schema_migrations" ("filename") VALUES ('20140315161218_initial.rb');

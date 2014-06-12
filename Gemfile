@@ -33,13 +33,13 @@ gem 'sdoc', '~> 0.4.0',          group: :doc
 
 # Testing
 group :development, :test do
-  gem 'rspec-rails'
+  gem 'rspec-rails', '~> 2.14.0'
   gem 'factory_girl_rails'
+  gem 'faker'
 end
 
 group :test do
   gem 'simplecov'
-#  gem 'faker'
 #  gem 'capybara'
 #  gem 'guard-rspec'
 #  gem 'launchy'

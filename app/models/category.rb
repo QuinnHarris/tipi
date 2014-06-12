@@ -3,6 +3,8 @@ Resource
 class Category < Sequel::Model
   plugin :versioned
 
+  many_to_one :user
+
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
     ver_many_to_many aspect, :class => self, join_table: :category_edges,
@@ -34,7 +36,7 @@ class Category < Sequel::Model
     #raise "Project Exists: #{values[:name]}" if project
     #raise "Expected to be in View context" unless current_context!.branch.is_a?(ProjectBranch)
     project = nil
-    RootBranch.root.fork(name: values[:name], class: ProjectBranch) do
+    RootBranch.root.fork(name: values[:name], class: ProjectBranch, user: context.user) do
       project = Project.create(values)
       add_resource(project)
       yield project if block_given?
@@ -45,7 +47,7 @@ class Category < Sequel::Model
   def add_child(values)
     self.class.db.transaction do
       child = self.class.create(values.merge(:context => context))
-      add_to(child)
+      add_to(child, context)
       child
     end
   end

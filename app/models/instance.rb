@@ -1,4 +1,6 @@
 class Instance < Sequel::Model
+  many_to_one :user
+
   aspects = [:from, :to]
   aspects.zip(aspects.reverse).each do |aspect, opposite|
     many_to_many aspect, join_table: :instance_relations, :class => self,

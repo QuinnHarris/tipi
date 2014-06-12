@@ -2,6 +2,8 @@ class Resource < Sequel::Model
   plugin :single_table_inheritance, :type
   plugin :versioned
 
+  many_to_one :user
+
   ver_one_to_many :task
 
   # Probably need association that can find instances of this and all older
@@ -30,7 +32,7 @@ end
 class UserResource < Resource
   def self.public
     return @@public.dup if class_variable_defined?('@@public')
-    @@public = where(id: 1).first!
+    @@public = where(record_id: 1).first!
   end
 end
 
