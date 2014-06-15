@@ -8,9 +8,12 @@ class User < Sequel::Model
   devise :database_authenticatable, :registerable,
          :recoverable, :rememberable, :trackable, :validatable, :confirmable, :lockable #, :omniauthable
 
+  # Assume this is in the Root Branch
+  def branch; RootBranch.context; end
+  def branch_path_context; []; end
+
   # Main View for user
   plugin :version_associations
-
   ver_many_to_one :resource
   def resource_branch_path; []; end
 

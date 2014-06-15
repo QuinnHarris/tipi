@@ -5,10 +5,16 @@ class CategoriesController < ApplicationController
   # Show all categories
   # GET /categories
   def index
-    context = RootBranch.root.context(version: params[:version])
+    context = RootBranch.context(version: params[:version], user: current_user)
     @category = Category.root(context)
     #@prev_version = Task.prev_version(@category.context)
     #@next_version = Task.next_version(@category.context)
+
+    Resource.db.transaction do
+      ds = UserResource.access_dataset(current_user)
+      UserResource.db.create_table :access, :temp => true, :as => ds, :on_commit => :drop
+      @resources = UserResource.db[:access].all
+    end
   end
 
   # Show all versions of a category
@@ -20,7 +26,7 @@ class CategoriesController < ApplicationController
   # Show page to create a new category
   # GET /categories/new
   def new
-    RootBranch.root.context do
+    RootBranch.context do
       @parent = Category.where(version: params[:parent]).first
       @category = Category.new
     end
@@ -29,7 +35,7 @@ class CategoriesController < ApplicationController
   # Create new category
   # POST /categories
   def create
-    RootBranch.root.context do
+    RootBranch.context do
       parent = Category.where(version: Integer(params[:parent][:version])).first
       parent.add_child(params[:category])
     end
@@ -41,7 +47,7 @@ class CategoriesController < ApplicationController
   before_action :set_category, only: [:edit, :update, :destroy]
   private
   def set_category
-    @category = Category.dataset(RootBranch.root).where(version: params[:id]).first
+    @category = Category.dataset(RootBranch.context).where(version: params[:id]).first
   end
   public
 

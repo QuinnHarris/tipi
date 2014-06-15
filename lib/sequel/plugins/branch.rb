@@ -79,7 +79,7 @@ module Sequel
         end
 
         def context(opts=OPTS, &block)
-          self.class.context(self, opts, &block)
+          Context.get(self, opts[:version], opts[:user]).apply(opts, &block)
         end
       end
 
@@ -124,14 +124,6 @@ module Sequel
           has_merge_point? || Rails.env.development?
         end
 
-        def context_dataset_select_list(branch_id, version)
-          [   Sequel.as(branch_id || Sequel.cast(nil, :integer), :branch_id),
-              Sequel.cast(nil, :integer).as(:successor_id),
-              Sequel.cast(version, :bigint).as(:version),
-              Sequel.as(0, :depth),
-              Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path) ]
-        end
-
         def context_dataset(branch_id, name = nil, merge_point = nil, version = nil)
           # Select this record as the start point of the recursive query
           # Include the version (or null) column used by recursive part
@@ -166,18 +158,29 @@ module Sequel
           context_dataset_recursive(ds, true, :branch_decend_sub)
         end
 
+        private
+        def context_dataset_select_list(branch_id, version)
+          [   Sequel.as(branch_id || Sequel.cast(nil, :integer), :branch_id),
+              Sequel.cast(nil, :integer).as(:successor_id),
+              Sequel.cast(version, :bigint).as(:version),
+              Sequel.as(0, :depth),
+              Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path) ]
+        end
+
         def context_dataset_recursive(base_ds, include_context = nil, cte_table = :branch_decend)
           connect_table = :branch_relations
 
           # Connect from the working set (cte_table) through the connect_table back to
           # this table.  Use the least (lowest) version number from the current
           # version or the connect_table version.  This ensures the version column
-          # on the connect_table retrieves in all objects at or below that version.
-          r_ds = db.from(cte_table)
-          .join(connect_table, :successor_id => :branch_id)
-          r_ds = r_ds.join(table_name,
-                           :id => :predecessor_id) if use_context_name? or
-              has_merge_point?
+          # on the connect_table retrieves all objects at or below that version.
+          r_ds = db.from(cte_table).join(connect_table, :successor_id => :branch_id)
+
+          if use_context_name? or has_merge_point?
+            r_ds = r_ds.join(table_name,
+                             :id => :predecessor_id)
+          end
+
           r_ds = r_ds.select(
               Sequel.as(:predecessor_id, :branch_id),
               Sequel.qualify(connect_table, :successor_id),
@@ -190,36 +193,43 @@ module Sequel
               Sequel.function(:count).*
               .over(:partition =>
                         Sequel.qualify(connect_table, :successor_id)).as(:count) )
+
           r_ds = r_ds.select_append(
               Sequel.qualify(table_name, :name)) if use_context_name?
+
           r_ds = r_ds.select_append(
               Sequel.qualify(cte_table, :merge_point).as(:merge_siblings),
               Sequel.function(:coalesce,
                               Sequel.qualify(table_name, :merge_point),
                               false).as(:merge_point) )  if has_merge_point?
+
           r_ds = r_ds.select_append(:context_id) if include_context
 
           bp_app_cond = Sequel.expr(:count) > 1
           bp_app_cond = bp_app_cond | Sequel.expr(:merge_siblings) if has_merge_point?
+
           r_ds = db.from(r_ds)
-          .select(:branch_id, :successor_id, :version, :depth,
-                  Sequel.case([[bp_app_cond,
-                                Sequel.pg_array(:branch_path)
-                                .concat(:branch_id) ]],
-                              :branch_path) )
+                  .select(:branch_id, :successor_id, :version, :depth,
+                          Sequel.case([[bp_app_cond,
+                                        Sequel.pg_array(:branch_path)
+                                        .concat(:branch_id) ]],
+                                      :branch_path) )
+
           r_ds = r_ds.select_append(:name) if use_context_name?
           r_ds = r_ds.select_append(:merge_point) if has_merge_point?
           r_ds = r_ds.select_append(:context_id) if include_context
 
           ds = db[cte_table].with_recursive(cte_table, base_ds, r_ds)
-          .select(:branch_id, :successor_id, :version, :depth, :branch_path)
+                .select(:branch_id, :successor_id, :version, :depth, :branch_path)
+
           ds = ds.select_append(:name) if use_context_name?
           ds = ds.select_append(:context_id) if include_context
           ds
         end
+        public
 
         def context(branch, opts=OPTS, &block)
-          Context.get(branch, opts[:version]).apply(opts, &block)
+          Context.get(branch, opts[:version], opts[:user]).apply(opts, &block)
         end
       end
     end

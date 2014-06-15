@@ -36,9 +36,10 @@ class Category < Sequel::Model
     #raise "Project Exists: #{values[:name]}" if project
     #raise "Expected to be in View context" unless current_context!.branch.is_a?(ProjectBranch)
     project = nil
-    RootBranch.root.fork(name: values[:name], class: ProjectBranch, user: context.user) do
+    RootBranch.branch.fork(name: values[:name], class: ProjectBranch, user: context.user) do
       project = Project.create(values)
       add_resource(project)
+      context.resource.add_to(project)
       yield project if block_given?
     end
     project

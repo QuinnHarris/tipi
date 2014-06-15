@@ -5,7 +5,7 @@ FactoryGirl.define do
     to_create do |user|
       user.resource_record_id = 0
       user.save
-      user.resource = UserResource.create(name: 'User', branch: RootBranch.root, user: user)
+      user.resource = UserResource.create(name: 'User', context: RootBranch.branch, user: user)
       user.save_changes
     end
 

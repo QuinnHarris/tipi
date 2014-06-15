@@ -3,7 +3,7 @@ class BranchContextError < StandardError; end
 # Represents Branch Context with a version lock
 class Sequel::Plugins::Branch::Context
   # Don't duplicate BranchContexts
-  def self.new(branch, version = nil)
+  def self.new(branch, version = nil, user = nil)
     return branch if branch.is_a?(self) and !version
     super
   end
@@ -21,6 +21,13 @@ class Sequel::Plugins::Branch::Context
     @user = user
   end
   attr_reader :id, :version, :user
+
+  def resource
+    return @resource if @resource
+    return @resource = user.resource if @user
+    # Should be in subclass or something
+    @resource = UserResource.public
+  end
 
   def branch_nil; @branch; end
 
@@ -46,24 +53,13 @@ class Sequel::Plugins::Branch::Context
     @table
   end
 
-  def data
-    return @data if @data
-    @data = Branch.db[table].all
-  end
-
-  def reset!
-    Branch.db.drop_table? @table if @table
-    @table = nil
-    @data = nil
-  end
-
   # Returns dataset or table if exists
   def dataset
     if block_given?
       if @table
         ds = yield @table
       else
-        @dataset ||=  @branch.context_dataset(@version)
+        @dataset ||= @branch.context_dataset(@version)
         table_name = :branch_decend
         ds = yield table_name
         ds = ds.with(table_name, @dataset)
@@ -74,6 +70,25 @@ class Sequel::Plugins::Branch::Context
       return @table if @table
       @dataset ||= @branch.context_dataset(@version)
     end
+  end
+
+  def data
+    return @data if @data
+    @data = Branch.db[dataset].all
+  end
+
+  def reset!
+    Branch.db.drop_table? @table if @table
+    @table = nil
+    @data = nil
+  end
+
+  def new(opts)
+    raise "Can't change branch" if opts[:branch]
+    raise "Can't raise version" if version and opts[:version] > version
+    c = self.class.new(@branch || @id, opts[:version], opts[:user] || @user)
+    c.instance_variable_set('@data', @data.map { |e| e[:version] = [e[:version], opts[:version]].min })
+    c
   end
 
   # Context Stack
@@ -91,9 +106,9 @@ class Sequel::Plugins::Branch::Context
   # Get a BranchContext for the specified branch or use the current context
   # if false is specified for version, raise exception if the context has a version lock
   # this is needed for anything that modifies the database
-  def self.get(branch = nil, version = nil)
+  def self.get(branch = nil, version = nil, user = nil)
     if branch
-      ctx = self.new(branch, version ? version : nil)
+      ctx = self.new(branch, version ? version : nil, user)
       current!.not_included!(ctx) if current!
     else
       ctx = current

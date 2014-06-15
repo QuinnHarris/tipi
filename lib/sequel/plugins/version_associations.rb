@@ -4,7 +4,25 @@ module Sequel
   module Plugins
     module VersionAssociations
       module InstanceMethods
+        # Branch Context associated with this object
+        def context(user = nil, &block)
+          unless ctx = @context
+            ctx = Branch::Context.get(branch)
+          end
+          ctx.apply(user: user, &block)
+        end
+
         private
+        attr_writer :context
+
+        # Current Branch Context
+        def current_context(ctx = nil, version = nil)
+          Branch::Context.get(ctx || Branch::Context.current! || context, version)
+        end
+        def current_context!(ctx = nil)
+          current_context(ctx, false)
+        end
+
         def dataset_from_edge(ds, r, context_data, node_branch_path)
           dataset = r.associated_class.raw_dataset
 

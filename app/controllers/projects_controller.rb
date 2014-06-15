@@ -9,11 +9,11 @@ class ProjectsController < ApplicationController
 
   def new
     @category = Category.where(version: params[:category]).first
-    @project = Project.new(branch: RootBranch.root)
+    @project = Project.new(context: RootBranch.context)
   end
 
   def create
-    RootBranch.root.context(user: current_user) do
+    RootBranch.context(user: current_user) do
       category = Category.where(version: params[:category][:version]).first
       @project = category.add_project(params[:project])
     end

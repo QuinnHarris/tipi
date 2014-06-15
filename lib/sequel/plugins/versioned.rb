@@ -53,7 +53,7 @@ module Sequel
                 (Sequel.qualify(lj, :version) <= Sequel.qualify(j, :version))
           end
           ds.opts[:versioned_table] = versioned_table
-          ds.opts[:last_record_id] = Sequel.qualify(versioned_table, :record_id)
+          #ds.opts[:last_record_id] = Sequel.qualify(versioned_table, :record_id)
           ds.opts[:order_columns] = (ds.opts[:order_columns] || []) +
               [Sequel.qualify(ds.opts[:last_joined_table], :depth),
                Sequel.qualify(versioned_table, :version).desc]
@@ -70,14 +70,19 @@ module Sequel
           last_branch_path_context.concat(
               Sequel.qualify(versioned_table, :branch_path))
         end
-        def last_record_id; @opts[:last_record_id] || :record_id; end
+        def last_record_id
+          return opts[:last_record_id] if opts[:last_record_id]
+          versioned_table ? Sequel.qualify(versioned_table, :record_id) : :record_id
+        end
 
         # Pick latest versions and remove deleted records
         def finalize(opts = {})
           model_table_name = model.raw_dataset.first_source_table
           sel_col = model.columns.map { |c| Sequel.qualify(model_table_name, c) }
           return select(*sel_col) if opts[:no_finalize]
-          ds = select(*sel_col,
+          extra_columns = [opts[:extra_columns]].flatten.compact
+
+          ds = select(*sel_col, *extra_columns,
                       Sequel.function(:rank)
                       .over(:partition => [last_record_id,
                                            last_branch_path].compact,
@@ -94,13 +99,15 @@ module Sequel
 
           return ds if opts[:include_all]
 
-          ds = ds.from_self
-          .where(:rank => 1)
+          ds = ds.from_self.where(:rank => 1)
           unless opts[:include_deleted]
             ds = ds.where(:deleted => false)
             ds = ds.where(:extra_deleted => false) if opts[:extra_deleted_column]
           end
           ds = ds.select(*model.columns)
+          if opts[:extra_columns]
+            ds = ds.select_append(extra_columns.map { |c| c.respond_to?(:aliaz) ? c.aliaz : c })
+          end
           ds = ds.select_append(:branch_path_context) if last_branch_path_context
           ds
         end
@@ -128,35 +135,6 @@ module Sequel
 
 
       module InstanceMethods
-        def context(user = nil, &block)
-          unless ctx = @context
-            ctx = Branch::Context.get(branch)
-          end
-          ctx.apply(user: user, &block)
-        end
-
-        def with_this_context
-          return self if context.id == branch_id
-          o = dup
-          ctx = o.send("context=", Branch::Context.get(branch_id, context.version))
-          path = context.path_from(ctx)
-          o.branch_path -= path # Should work but doesn't check for problems
-          o.freeze
-          o
-        end
-        private
-        attr_writer :context
-        attr_writer :previous
-
-        def current_context(ctx = nil, version = nil)
-          Branch::Context.get(ctx || Branch::Context.current! || context, version)
-        end
-        def current_context!(ctx = nil)
-          current_context(ctx, false)
-        end
-        public
-
-
         def branch_path(ctx = nil)
           Sequel.pg_array(branch_path_context(ctx) + branch_path_record, 'integer')
         end
@@ -256,6 +234,9 @@ module Sequel
         end
 
         # Make active model methods work right with versioning
+        private
+        attr_writer :previous
+        public
         def persisted?
           !@previous.nil? || super
         end
