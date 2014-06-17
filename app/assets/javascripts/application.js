@@ -13,7 +13,6 @@
 //= require jquery
 //= require jquery_ujs
 //= require turbolinks
-//= require bootstrap
 //= require d3
 //= require froala_editor.min.js
 //= require dagre-d3

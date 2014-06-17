@@ -16,7 +16,7 @@ gem 'haml'
 gem 'jquery-rails'
 gem 'jquery-ui-rails'
 
-gem 'foundation-rails'
+#gem 'foundation-rails'
 gem 'd3_rails'
 
 # Turbolinks makes following links in your web application faster. Read more: https://github.com/rails/turbolinks
