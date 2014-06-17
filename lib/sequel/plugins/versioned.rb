@@ -7,12 +7,10 @@ module Sequel
         attr_writer :context
 
         def setup_object(o)
-          return o if o.frozen?
           if context and o.respond_to?(:context)
             o.send('context=', context)
             o.send('branch_path_context=', o.values.delete(:branch_path_context) || [])
           end
-          o.freeze
           o
         end
 
@@ -112,10 +110,10 @@ module Sequel
           ds
         end
 
-        protected
-        def _all(block)
-          super.map { |r| setup_object(r) }
-        end
+        #protected
+        #def _all(block)
+        #  super.map { |r| setup_object(r) }
+        #end
       end
 
 
@@ -150,9 +148,24 @@ module Sequel
         end
         public
 
-        def set_context!(ctx)
-          @branch_path_context = branch_path_context(ctx)
-          @context = current_context(ctx)
+        def dup
+          bpc = @branch_path_context
+          c = @context
+          super.instance_eval do
+            @branch_path_context = bpc
+            @context = c
+            self
+          end
+        end
+
+        def dup_with_context(ctx)
+          s = self
+          dup.instance_eval do
+            ctx = current_context(ctx)
+            branch_path_context = s.branch_path_context(ctx)
+            @context = ctx
+            self
+          end
         end
 
         # Change equals to handle computed branch_path
@@ -161,7 +174,7 @@ module Sequel
         end
 
         def inspect
-          "#<#{model.name} ctx=#{@context.id},#{@context.version},#{@context.user},[#{@branch_path_context.join(',')}] @values=#{inspect_values}>"
+          "#<#{model.name} ctx=#{@context.id},#{@context.version},#{@context.user},[#{branch_path_context.join(',')}] @values=#{inspect_values}>"
         end
 
         def versions_dataset(all = false)
@@ -265,11 +278,11 @@ module Sequel
         private
         # Freeze objects after save
         # Can't use after_save because class is modified after that call
-        def _save(opts)
-          super(opts)
-          freeze
-          self
-        end
+        # def _save(opts)
+        #   super(opts)
+        #   freeze
+        #   self
+        # end
 
 
         private

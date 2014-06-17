@@ -8,8 +8,10 @@ class ProjectsController < ApplicationController
   end
 
   def new
-    @category = Category.where(version: params[:category]).first
-    @project = Project.new(context: RootBranch.context)
+    RootBranch.context(user: current_user) do
+      @category = Category.where(version: params[:category]).first
+      @project = Project.new
+    end
   end
 
   def create
@@ -153,7 +155,6 @@ class ProjectsController < ApplicationController
             @nodes.each do |n|
               n.to_edge.each do |edge|
                 # KLUDGE, associations don't update because objects are frozen
-                edge = edge.dup # Because its frozen
                 to = node_map[edge.to_record_id]
                 next unless to # Edge is still here but node has been deleted
                 edge.instance_variable_set('@associations',
@@ -271,7 +272,6 @@ class ProjectsController < ApplicationController
             end
 
             edge = from.send("#{op}_to", to, nil, created_at)
-            edge = edge.dup
             edge.instance_variable_set('@associations',
                                        to: to,
                                        from: from)
