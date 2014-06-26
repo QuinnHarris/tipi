@@ -1,0 +1,143 @@
+/*
+ * This is a manifest file that'll be compiled into application.css, which will include all the files
+ * listed below.
+ *
+ * Any CSS and SCSS file within this directory, lib/assets/stylesheets, vendor/assets/stylesheets,
+ * or vendor/assets/stylesheets of plugins, if any, can be referenced here using a relative path.
+ *
+ * You're free to add application-wide styles to this file and they'll appear at the bottom of the
+ * compiled file so the styles you add here take precedence over styles defined in any styles
+ * defined in the other CSS/SCSS files in this directory. It is generally better to create a new
+ * file per style scope.
+ *
+ *= require froala_editor.min.css
+ *= require font-awesome
+ *= require alertify/core
+ *= require alertify/default
+ *  Do not require tree as we use controller specific assets but this gets loaded first
+ *= require_self
+ */
+
+$p:#D34B47;
+$pl:#F57773;
+$pll:#FFA5A3;
+$pd:#B52A26;
+$pdd:#8F100D;
+$s:#D39547;
+$sl:#F5BC73;
+$sll:#FFD6A3;
+$sd:#B57626;
+$sdd:#8F550D;
+$s2:#336687;
+$s2l:#4F7E9C;
+$s2ll:#7EA5BF;
+$s2d:#1E5274;
+$s2dd:#0D3D5C;
+$c:#38A63F;
+$cl:#5BC161;
+$cll:#8BD990;
+$cd:#1E8E26;
+$cdd:#0A7111;
+
+$font: Helvetica sans-serif 12px;
+
+text{
+  font: $font;
+}
+button{
+  color: $cll;
+  background: $s2d;
+}
+
+body{
+  padding:0,0,0,0;
+  margin:0;
+}
+
+.content-header{
+  
+	display: flex;
+	width: 100%;
+	height: 3em;
+	justify-content: space-between;
+	background: $p;
+	.left{
+		display: block;
+		margin: auto;
+	}
+	.center{
+	  margin: auto;
+	  width: 80%;
+	  display: block;
+		.search{
+		  border: 2px solid $s2d;
+      border-radius: 10px;
+		  display: block;
+      margin: auto;
+      background: white;
+		  .icon{
+		    padding-right: 3px;
+        display: inline-block;
+        margin: 2px;
+        float: right;
+        max-height: 80%;
+        max-width: 5%;
+        cursor: pointer;
+      }
+			width: 70%;
+			input{
+			  padding-left: 5px;
+			  width: 90%;
+			  border: none;
+			  border-radius: 5px;
+			  outline: none;
+			}
+		}
+		button{
+		  height: 100%;
+		  color: white;
+      display: inline-block;
+      max-width: 8%;
+      border: none;
+      border-radius: 2,2,2,2;
+    }
+	}
+	.right{
+		.browse{}
+		.create{}
+		.notifications{}
+		.sign-out{}
+		.sign-in{}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
