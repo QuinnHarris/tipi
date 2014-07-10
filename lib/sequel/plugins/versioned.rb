@@ -75,18 +75,22 @@ module Sequel
 
         # Pick latest versions and remove deleted records
         def finalize(opts = {})
-          model_table_name = model.raw_dataset.first_source_table
+          # Can we use opts[:from] instead of first_source_table and override?
+          model_table_name = opts[:model_table_name] || model.raw_dataset.first_source_table
           sel_col = model.columns.map { |c| Sequel.qualify(model_table_name, c) }
           return select(*sel_col) if opts[:no_finalize]
           extra_columns = [opts[:extra_columns]].flatten.compact
+          extra_columns_src = extra_columns.map { |c| c.try(:expression) || c }
 
           ds = select(*sel_col, *extra_columns,
                       Sequel.function(:rank)
-                      .over(:partition => [last_record_id,
-                                           last_branch_path].compact,
-                            :order     => @opts[:order_columns] ||
-                                Sequel.qualify(model_table_name,
-                                               :version).desc))
+                        .over(:partition => @opts[:partition_columns] ||
+                                              (extra_columns_src +
+                                               [last_record_id,
+                                                last_branch_path].compact),
+                              :order     => @opts[:order_columns] ||
+                                              Sequel.qualify(model_table_name,
+                                                             :version).desc))
           if last_branch_path_context
             ds = ds.select_append(last_branch_path_context.as(:branch_path_context))
           end
@@ -104,7 +108,7 @@ module Sequel
           end
           ds = ds.select(*model.columns)
           if opts[:extra_columns]
-            ds = ds.select_append(extra_columns.map { |c| c.respond_to?(:aliaz) ? c.aliaz : c })
+            ds = ds.select_append(*extra_columns.map { |c| c.try(:aliaz) || c })
           end
           ds = ds.select_append(:branch_path_context) if last_branch_path_context
           ds
@@ -174,7 +178,10 @@ module Sequel
         end
 
         def inspect
-          "#<#{model.name} ctx=#{@context.id},#{@context.version},#{@context.user},[#{branch_path_context.join(',')}] @values=#{inspect_values}>"
+          str = "#<#{model.name} "
+          str += "ctx=#{@context.id},#{@context.version},#{@context.user},[#{branch_path_context.join(',')}] " if @context
+          str += "@values=#{inspect_values}>"
+          str
         end
 
         def versions_dataset(all = false)
@@ -329,12 +336,24 @@ module Sequel
           run_association_callbacks(opts, :after_remove, o)
           opts[:join_class] ? r : o
         end
+      end
 
-        def dataset_to_edge(dataset, context_data, r)
-          ds = dataset.from(r[:join_table])
 
+      module ClassMethods
+        # join_table, context_version,
+        # this_record_id   => left_record_id
+        # this_branch_path => left_branch_path
+        # inter { right_branch_id }
+        def dataset_one_to_many(dataset, context_data, r)
           # Select edges connected to this node
-          ds = ds.where(r[:left_record_id] => record_id)
+          if r[:start_table]
+            ds = dataset.from(r[:start_table])
+                  .join(r[:join_table],
+                        r[:left_record_id] => r[:this_record_id])
+          else
+            ds = dataset.from(r[:join_table])
+                  .where(r[:left_record_id] => r[:this_record_id])
+          end
 
           # Split edges between in context and out of context
           # Treat in context edges the same with or without inter branch
@@ -347,7 +366,7 @@ module Sequel
                                 db[context_data].select(:branch_id))
                 .as(:in_context))
 
-            if ctx_ver = current_context.version
+            if ctx_ver = r[:context_version]
               ds_common = ds_common.where { |o| o.version < ctx_ver }
             end
 
@@ -363,15 +382,15 @@ module Sequel
           branch_path_select = ds.last_branch_path_context.concat(
               Sequel.qualify(r[:join_table], r[:left_branch_path]))
 
-          ds = ds.where(branch_path_select => branch_path)
+          ds = ds.where(branch_path_select => r[:this_branch_path])
 
 
           if r[:inter]
             ds = ds.select(Sequel::SQL::ColumnAll.new(table_common),
                            Sequel.qualify(:branch_edges, :depth)
-                             .as(:edge_branch_depth),
+                           .as(:edge_branch_depth),
                            Sequel.qualify(:branch_edges, :branch_path)
-                             .as(:edge_branch_path))
+                           .as(:edge_branch_path))
 
             ds_in = ds
             ds_out = ds_base.exclude(:in_context)
@@ -392,9 +411,32 @@ module Sequel
 
           ds
         end
-      end
 
-      module ClassMethods
+        # join_table, context_version,
+        # this_record_id   => left_record_id
+        # this_branch_path => left_branch_path
+        # right_record_id
+        # right_branch_path
+        # inter { right_branch_id }
+        def dataset_many_to_many(dataset, context_data, r)
+          ds  = dataset_one_to_many(dataset, context_data, r)
+
+          # Join final nodes
+          ds = ds.join(dataset.first_source_table,
+                       :record_id => Sequel.qualify(r[:join_table],
+                                                    r[:right_record_id]) )
+
+          ds = dataset_many_to_one(ds, context_data, r,
+                                   Sequel.qualify(:branch_edges,
+                                                  :branch_path).pg_array.concat(
+                                       Sequel.qualify(r[:join_table],
+                                                      r[:right_branch_path]) ) )
+
+          ds.finalize(extra_deleted_column: Sequel.qualify(r[:join_table],
+                                                           :deleted),
+                      extra_columns: r[:extra_columns])
+        end
+
         # Dataset for latest version of rows within the provided branch (and predecessors)
         # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
         private
@@ -497,21 +539,11 @@ module Sequel
             current_context.not_included_or_duplicated!(context, false)
             current_context.dataset do |context_data|
               dataset = r.associated_class.raw_dataset
-              ds  = dataset_to_edge(dataset, context_data, r)
 
-              # Join final nodes
-              ds = ds.join(dataset.first_source_table,
-                           :record_id => Sequel.qualify(r[:join_table],
-                                                        r[:right_record_id]) )
-
-              ds = dataset_from_edge(ds, r, context_data,
-                                     Sequel.qualify(:branch_edges,
-                                                    :branch_path).pg_array.concat(
-                                         Sequel.qualify(r[:join_table],
-                                                        r[:right_branch_path]) ) )
-
-              ds.finalize(extra_deleted_column: Sequel.qualify(r[:join_table],
-                                                               :deleted))
+              self.class.dataset_many_to_many(dataset, context_data,
+                                              r.merge(this_record_id: record_id,
+                                              this_branch_path: branch_path,
+                                              context_version: current_context.version))
             end
           end
 
@@ -528,7 +560,10 @@ module Sequel
             current_context.not_included_or_duplicated!(context, false)
             current_context.dataset do |context_data|
               dataset = r.associated_class.raw_dataset
-              ds = dataset_to_edge(dataset, context_data,
+              ds = self.class.dataset_one_to_many(dataset, context_data,
+                                   this_record_id: record_id,
+                                   this_branch_path: branch_path,
+                                   context_version: current_context.version,
                                    join_table: dataset.first_source_table,
                                    left_record_id: r[:record_id],
                                    left_branch_path: r[:branch_path])

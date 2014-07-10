@@ -1,8 +1,9 @@
 %li
-  = link_to category.name, category_path(category)
-  \-
-  = link_to 'Edit', edit_category_path(category)
-  \-
+  - unless category.root?
+    = link_to category.name, category_path(category)
+    \-
+    = link_to 'Edit', edit_category_path(category)
+    \-
   = link_to 'New', new_category_path(:parent => category)
   \-
   = link_to 'New Project', new_project_path(:category => category)
@@ -13,4 +14,3 @@
   - if category.children.empty? and category.resources.empty?
     \-
     = link_to 'Delete', category_path(category), :method => :delete
-

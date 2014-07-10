@@ -51,7 +51,7 @@ class ProjectsController < ApplicationController
   end
 
   def branch
-    project = @project.clone(params[:project])
+    project = @project.clone(params[:project].merge(user: current_user))
 
     redirect_to project_path(project), notice: 'Project was successfully cloned.'
   end

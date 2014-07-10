@@ -22,6 +22,9 @@ class Category < Sequel::Model
     #return @@root.dup if class_variable_defined?('@@root')
     #@@root = where(record_id: 1).first!
   end
+  def root?
+    record_id == 1
+  end
 
   def previous_version(context = nil)
     ds = dataset(context, no_finalize: true)
@@ -64,6 +67,51 @@ class Category < Sequel::Model
       cur = cur.get_child(name)
     end
     cur
+  end
+
+  # Not yet used
+  def self.root_ascend(context)
+    cte_table = :category_ascend
+
+    r = association_reflections[:to]
+          .merge(this_record_id: Sequel.qualify(cte_table, :record_id),
+                 this_branch_path: Sequel.qualify(cte_table, :branch_path),
+                 context_version: nil,
+                 start_table: cte_table,
+                 extra_columns: Sequel.qualify(cte_table, :version).as(:from_version))
+
+    context.dataset do |context_data|
+      base_ds = where(record_id: 1).select_append(
+          Sequel.cast(nil, :bigint).as(:from_version),
+          Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path_context))
+
+      r_ds = self.dataset_many_to_many(dataset, context_data, r)
+
+      r_ds = yield r_ds if block_given?
+
+      dataset.from(cte_table).with_recursive(cte_table, base_ds, r_ds)
+    end
+  end
+
+  def self.decend(base_ds, ctx = nil)
+    cte_table = :category_decend
+
+    r = association_reflections[:from]
+          .merge(this_record_id: Sequel.qualify(cte_table, :record_id),
+                 this_branch_path: Sequel.qualify(cte_table, :branch_path),
+                 context_version: nil,
+                 start_table: cte_table,
+                 extra_columns: Sequel.qualify(cte_table, :version).as(:to_version))
+
+    current_context(ctx).dataset do |context_data|
+      base_ds = base_ds.select_append(
+          Sequel.cast(nil, :bigint).as(:to_version),
+          Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path_context))
+
+      r_ds = self.dataset_many_to_many(dataset, context_data, r)
+
+      dataset.from(cte_table).with_recursive(cte_table, base_ds, r_ds)
+    end.distinct
   end
 
   # !!!! OLD CATEGORY CODE

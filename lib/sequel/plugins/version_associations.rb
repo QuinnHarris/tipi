@@ -22,24 +22,29 @@ module Sequel
         def current_context!(ctx = nil)
           current_context(ctx, false)
         end
+      end
 
-        def dataset_from_edge(ds, r, context_data, node_branch_path)
-          dataset = r.associated_class.raw_dataset
+      module ClassMethods
+        def current_context(ctx = nil, version = nil)
+          Branch::Context.get(ctx || Branch::Context.current!, version)
+        end
 
+        # join_table, context_version, inter { right_branch_id }
+        def dataset_many_to_one(ds, context_data, r, node_branch_path)
           # Change context_data to include context table for inter branch dst
           if r[:inter]
             table_common = r[:join_table]
-            ds_br = ::Branch.context_dataset_from_set(dataset.from(table_common)
-                                                    .exclude(:in_context),
-                                                    r[:right_branch_id],
-                                                    current_context.version)
+            ds_br = ::Branch.context_dataset_from_set(db[table_common]
+                                                      .exclude(:in_context),
+                                                      r[:right_branch_id],
+                                                      r[:context_version])
             context_data = ds_br.union(
                 db.from(context_data)
                 .select_append(Sequel.as(nil, :context_id)))
 
             ds = ds.where { (Sequel.expr(:context_id => nil) & :in_context) |
                 Sequel.expr(:context_id => r[:right_branch_id] ||
-                                           Sequel.qualify(r[:join_table], :branch_id) ) }
+                    Sequel.qualify(r[:join_table], :branch_id) ) }
           end
 
           # Join branch context table(s)
@@ -55,9 +60,7 @@ module Sequel
 
           ds
         end
-      end
 
-      module ClassMethods
         private
         def ver_common_opts(opts)
           unless [nil, :branch, :context].include?(opts[:inter])
@@ -89,10 +92,11 @@ module Sequel
 
               ds = ds.where(:record_id => send(opts[:record_id]))
 
-              ds = dataset_from_edge(ds, r, context_data,
-                                     Sequel.pg_array(branch_path_context +
-                                                         send(opts[:branch_path]),
-                                                     'integer') )
+              ds = self.class.dataset_many_to_one(ds, context_data,
+                              r.merge(context_version: current_context.version),
+                              Sequel.pg_array(branch_path_context +
+                                                  send(opts[:branch_path]),
+                                              'integer') )
 
               ds.finalize
             end
