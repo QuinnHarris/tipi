@@ -6,6 +6,7 @@
     %meta{ name: 'viewport', content: "width=device-width, initial-scale=1.0" }
     %title= content_for?(:title) ? yield(:title) : 'Pitri.net'
     
+    %link{href:'http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,400,300,600,700,800', rel: 'stylesheet', type:'text/css'}
     = stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true
     = stylesheet_link_tag    params[:controller], media: "all", "data-turbolinks-track" => true
     = javascript_include_tag "application", "data-turbolinks-track" => true
@@ -15,20 +16,22 @@
   %body
     %header.content-header
       .left
-        =link_to "Pitri.net", root_path
+        =link_to root_path do
+          .logo Pitri.net
       .center
         .search
           .div
             %input{placeholder: "Search Pitri.net"}
-            .icon.fa.fa-search.fa-lg{title: "search"}
+            .icon.fa.fa-search.fa-lg{title: "search Pitri"}
       .right
         =link_to categories_path do
-          %i.fa.fa-sitemap.browse
-        =link_to new_project_path do
-          %i.fa.fa-flask.create
+          %i.browse{title: 'browse Pitri'} browse 
         -if user_signed_in?
-          .notifications
-          .user-menu
+          =link_to new_project_path do
+            %i.fa.fa-flask.create{title: "new Project"}
+          %i.fa.fa-exclamation-circle.notifications{title: 'notificatioins'}
+          %i.fa.fa-cog.user-menu
         -else
-          .sign-in
+          =link_to new_user_session_path do
+            %i.sign-in sign in
     =yield

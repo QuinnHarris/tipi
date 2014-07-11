@@ -25,11 +25,10 @@
  * 
  */
 
-var margin = { left: 20, top: 20, bottom: 0, right: 0 };
-var svg;
-var svgg;
-var backdrop;
-
+var margin = { left: 20, top: 20, bottom: 0, right: 0 },
+	svg,
+	svgg,
+	backdrop;
 
 function initSvg(){
 	svgNoZoom = d3.select("#svg-container")
@@ -76,6 +75,7 @@ function render(){
 	svgg.selectAll('.node-outer')
 		.call(d3.behavior.drag()
 			.on('dragstart', dragstart)
+			.on('drag', dragged)
 			.on('dragend', dragend))
     	.on('contextmenu', contextmenu)
     	.on('mousedown', nodeClick);
@@ -280,7 +280,7 @@ $(document).on('focusout', '#doc-title', focusoutDocName);
 $(document).bind('keyup', '#search-input', searchInput);
 
 function dragResize(){
-	console.log(d3.event)
+	console.log(d3.event);
 	$('#side-container').width(d3.event.x - ($(window).width() * .05));
 	setH();
 }
@@ -331,6 +331,7 @@ function openDoc(){
 	$('#doc-view-icon').hide();
 	$('#collapse').show();
 	$('#side-empty').hide();
+	setH();
 }
 function collapse(){
 	$('#doc-title').hide();
@@ -348,12 +349,50 @@ if (d3.event) {
     d3.event.preventDefault();
 }
 
+function unTransform(){
+	//this function returns the x and y values for the dragLine. It reverses the transformation from the d3 Zoom behavior.
+	var t = svgg.attr('transform');
+	var comma = t.indexOf(',');
+	var ty = t.substr(10, comma-10);
+	var close = t.indexOf(')');
+	var tx = t.substr(comma + 1, close - comma - 1);
+	var scale = t.substr(t.search('scale') + 6, t.length-1);
+	scale = scale.substr(0,scale.length -1);
+	
+	tx = parseFloat(tx);
+	ty = parseFloat(tx);
+	scale = parseFloat(scale);
+	
+	var m = d3.mouse(svgNoZoom.node());
+		x = m[0] - tx,
+		y = m[1] - ty;
+	
+	return {x: x, y: y, scale: scale}
+	
+}
+
 // listener functions
 function dragstart(){
-	d3.event.sourceEvent.stopPropagation();
+	d3.event.sourceEvent.stopPropagation();//stops the event from bubbling and allows dragging to take precedence over zoom.
+	var t = unTransform();
+	
+	dragline = svgg.append('line')
+		.attr('x2', t.x)
+		.attr('y2', t.y)
+		.attr('x1', t.x)
+		.attr('y1', t.y)
+		.classed('dragline', true);
+}
+
+function dragged(){
+	var t = unTransform();
+	dragline
+		.attr('x2', t.x )
+		.attr('y2', t.y );
 }
 
 function dragend(){
+	dragline.remove();
 	if(typeof activeNode !== 'undefined'){
 		var abort = false;
 		var source = this.id;
@@ -440,8 +479,6 @@ function contextmenu(){
     var popup = d3.select(".popup");
     popup.remove();// delete old menu in case it's there
 	id = d3.event.target.id;
-	console.log(this);
-	console.log(d3.event);
     mousePosition = d3.mouse(svgNoZoom.node()); //map mouse movements
     //Create the html for the menu
     menu = "<ul class = 'custom-context-menu'>";
@@ -569,11 +606,11 @@ function edit(){
 }
 
 function setH(){
-	var pad = 3;
+	var pad = 24;
 	var buffer = 5;
 	var h = {};
 	h.app = $(window).height()
-		- $(".top-bar").height()
+		- $(".content-header").height()
 		- buffer;
 	h.doc = h.app
 		- $(".froala-editor.f-basic").height()
@@ -584,10 +621,11 @@ function setH(){
 	h.search = h.app
 		- $(".doc-header").height();
 		
+	$(".froala-box").height(h.doc);		
+	$(".froala-element").height(h.doc);	
 	$('#app-container').height(h.app);
 	$('svg').height(h.svg);
-	$("#doc").height(h.doc);
-	$('#search-container').height(h.search);
+	$('#side-container').height(h.app);
 }
 
 menuData = {
@@ -623,7 +661,7 @@ function youTimes(embed, start, end){
 	var emb = $.parseHTML(embed);
 	var src = emb[0].src;
 	function format(str){
-		var s = str.toString()
+		var s = str.toString();
 		var n = s.search(':');
 		if(n == -1) return parseInt(s);
 		var m = s.substr(0,n);

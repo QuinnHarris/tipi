@@ -1,11 +1,14 @@
 // Place all the styles related to the creator controller here.
 // They will automatically be included in application.css.
 // You can use Sass (SCSS) here: http://sass-lang.com/
+
+@import 'application';
+
 .sc{
   display: flex;
   width: 100%;
   height: 5em;
-  background: #e8e4e0;
+  background: white;
   flex-direction: column;
   margin-bottom: 2px;
   .stc{
@@ -18,13 +21,13 @@
       font-family: Futura, "Trebuchet MS", ariel, sans-serif;
       font-style: bold; 
       font-weight: 2em;
-      background: #1b1b1b;
+      background: $pdd;
       width: 100%;
     }
     .sbc{
       display: flex;
       justify-content: space-between;
-      background: #deb928;
+      background: $s2dd;
       width:40%;
       height: 100%;
       .sbb{
@@ -57,6 +60,7 @@ svg {
   border: 1px solid #999;
   overflow: scroll;
   display: block;
+  width: 100%;
 }
 text {
   font-weight: 300;
@@ -64,13 +68,15 @@ text {
   font-size: 14px;
 }
 
-.hidden{display: none;}
-
 .active-node{
-  background: linear-gradient(to bottom, rgba(254,185,0,1) 25%,rgba(255,197,42,1) 50%,rgba(255,215,110,1) 100%,rgba(255,215,110,1) 100%) !important;
+  background: $p !important;
 }
 .next-node{
-  background: linear-gradient(to bottom, rgba(80,185,174,1) 50%,rgba(255,215,110,1) 51%,rgba(0,158,141,1) 92%) !important;
+  background: $c !important;
+}
+
+.froala-element{
+  background: white;
 }
 
 #app-container{
@@ -104,12 +110,14 @@ text {
       #side-buttons-container{
         display: flex;
         align-items: center;
+        flex-direction: column;
+        margin-top: auto;
+        margin-bottom: auto;
       }
       button{
-        background-color: black;
         height: 1.1em;
         width: 1.1em;
-        margin: 0.05em;
+        margin: 0.2em;
         padding: 0.05em;
       }
     }
@@ -139,7 +147,6 @@ text {
       flex-direction: column;
       
       button{
-        background-color: black;
         height: 1.1em;
         width: 1.1em;
         margin: 0.05em;
@@ -186,9 +193,11 @@ text {
     }
     
     #svg-container{
-      background-color:#C5C8E2;
-      svg { width: 100%; } /* Needed for Firefox */
-    
+      background-color: $sll;
+      .dragline{
+        stroke: black;
+        stroke-width: 2;
+      }
       .edgePath path {
         stroke: #333;
         stroke-width: 1px;
@@ -197,11 +206,10 @@ text {
       .node rect {
         stroke: #333;
         stroke-width: 1px;
-        fill: #C5C8E2;
       }
       .node-outer{
-        width:auto;
-        background: linear-gradient(to bottom, rgba(211,193,225,1) 50%,rgba(149,91,194,1) 88%,rgba(100,7,171,1) 100%);
+        width: auto;
+        background: $s2;
         display: flex;
         align-items: center;
         white-space: nowrap;
@@ -234,12 +242,12 @@ text {
         }
       }
       .custom-context-menu{
-        $menu-color: lightblue;
+        $menu-color: $s2l;
         
         list-style-type: none;
         margin-left: 0 !important;
         .custom-context-menu:hover{
-          background-color:darken($menu-color, 10%);
+          background-color: darken($menu-color, 10%);
         }
         .context-menu-item{
           border: 1px solid;

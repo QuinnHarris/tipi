@@ -39,36 +39,51 @@ $cll:#8BD990;
 $cd:#1E8E26;
 $cdd:#0A7111;
 
-$font: Helvetica sans-serif 12px;
+$font: 'Open Sans' sans-serif;
 
-text{
-  font: $font;
-}
-button{
-  color: $cll;
-  background: $s2d;
-}
+
 
 body{
   padding:0,0,0,0;
   margin:0;
+  font-family: $font;
+  input{
+    font-family: $font;
+  }
+  background: $s2ll;
 }
 
+button{
+  background: $sl;
+  border: none;
+  height: 2em;
+  width: 2em;
+}
+
+.hidden{display: none;}
+
 .content-header{
-  
 	display: flex;
 	width: 100%;
+	height: 500px;
 	height: 3em;
 	justify-content: space-between;
 	background: $p;
 	.left{
-		display: block;
+		display: flex;
 		margin: auto;
+		flex-grow:1;
+		justify-content: center;
+		a{
+		  text-decoration: none;
+		  color: black;
+		  font-size: 24px;
+		}
 	}
 	.center{
 	  margin: auto;
-	  width: 80%;
 	  display: block;
+	  width: 70%;
 		.search{
 		  border: 2px solid $s2d;
       border-radius: 10px;
@@ -92,17 +107,18 @@ body{
 			  border-radius: 5px;
 			  outline: none;
 			}
+			flex-grow:1;
 		}
-		button{
-		  height: 100%;
-		  color: white;
-      display: inline-block;
-      max-width: 8%;
-      border: none;
-      border-radius: 2,2,2,2;
-    }
 	}
 	.right{
+	  flex-grow:1;
+	  display: flex;
+	  margin: auto;
+	  justify-content: space-around;
+	  i{
+	    padding: 2px;
+	    color: black;
+	  }
 		.browse{}
 		.create{}
 		.notifications{}
@@ -111,33 +127,10 @@ body{
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+.user-container{
+  display: block;
+  text-align: center;
+  vertical-align: center;
+  margin: auto;
+  background: $s2ll;
+}
