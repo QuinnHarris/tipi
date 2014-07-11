@@ -14,12 +14,11 @@ class CategoriesController < ApplicationController
       res_map = Hash.new([])
       resources.each { |r| res_map[r.values[:category_record_id]] += [r] }
 
-      ds_cat = Category.where(
-          Sequel.expr(:record_id => res_map.keys) |
-          Sequel.expr(:user_id => current_user.id) )
+      exp_cat = Sequel.expr(:record_id => res_map.keys)
+      exp_cat |= Sequel.expr(:user_id => current_user.id) if current_user
 
       context = RootBranch.context(version: params[:version], user: current_user)
-      categories = Category.decend(ds_cat.finalize, context).all
+      categories = Category.decend(Category.where(exp_cat).finalize, context).all
 
       cat_map = {}
       categories.each { |c| cat_map[c.version] = c }
@@ -28,7 +27,7 @@ class CategoriesController < ApplicationController
         c = cat_map[c.version]
         c.associations[:to] = (c.associations[:to] || []) + (child ? [cat_map[child]] : [])
         if res = res_map[c.record_id]
-          c.associations[:resources] = (c.associations[:resources] || []) + res
+          c.associations[:resources] = ((c.associations[:resources] || []) + res).uniq
         end
       end
 
