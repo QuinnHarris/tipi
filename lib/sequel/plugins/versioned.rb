@@ -82,7 +82,7 @@ module Sequel
           extra_columns = [opts[:extra_columns]].flatten.compact
           extra_columns_src = extra_columns.map { |c| c.try(:expression) || c }
 
-          ds = select(*sel_col, *extra_columns,
+          ds = select(*sel_col,
                       Sequel.function(:rank)
                         .over(:partition => @opts[:partition_columns] ||
                                               (extra_columns_src +
@@ -94,6 +94,8 @@ module Sequel
           if last_branch_path_context
             ds = ds.select_append(last_branch_path_context.as(:branch_path_context))
           end
+
+          ds = ds.select_append(*extra_columns) unless extra_columns.empty?
 
           if opts[:extra_deleted_column]
             ds = ds.select_append(opts[:extra_deleted_column].as(:extra_deleted))
@@ -107,10 +109,10 @@ module Sequel
             ds = ds.where(:extra_deleted => false) if opts[:extra_deleted_column]
           end
           ds = ds.select(*model.columns)
-          if opts[:extra_columns]
-            ds = ds.select_append(*extra_columns.map { |c| c.try(:aliaz) || c })
-          end
           ds = ds.select_append(:branch_path_context) if last_branch_path_context
+          if opts[:extra_columns]
+            ds = ds.select_append(*extra_columns.map { |c| c.try(:aliaz) || c.try(:column) || c })
+          end
           ds
         end
 
@@ -431,6 +433,8 @@ module Sequel
                                                   :branch_path).pg_array.concat(
                                        Sequel.qualify(r[:join_table],
                                                       r[:right_branch_path]) ) )
+
+          ds = yield ds if block_given?
 
           ds.finalize(extra_deleted_column: Sequel.qualify(r[:join_table],
                                                            :deleted),

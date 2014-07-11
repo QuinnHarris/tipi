@@ -1,3 +1,12 @@
+class Forbidden < StandardError; end
+
+class PermissionToken
+  def initialize(value)
+    @value = value
+  end
+  attr_accessor :value
+end
+
 class Resource < Sequel::Model
   plugin :single_table_inheritance, :type
   plugin :versioned
@@ -26,6 +35,46 @@ class Resource < Sequel::Model
 
   def to_param
     "#{record_id}-#{branch_id}"
+  end
+
+  attr_reader :permission
+
+  def self.access(record_id, filter = 2147483647)
+    cte_table = :access_decend
+
+    r = association_reflections[:from]
+          .merge(this_record_id: Sequel.qualify(cte_table, :record_id),
+                 this_branch_path: Sequel.qualify(cte_table, :branch_path),
+                 context_version: nil,
+                 start_table: cte_table,
+                 extra_columns: Sequel.qualify(cte_table, :access))
+
+    user_record_id = [current_context.user && current_context.user.resource_record_id, 1].compact
+
+    ds = current_context.dataset do |context_data|
+      # Class exclusion where IN clause goes through with_recursive
+      base_ds = Resource.where(record_id: Integer(record_id))
+      base_ds = base_ds.select_append(Sequel.as(filter, :access))
+
+      r_ds = self.dataset_many_to_many(Resource.raw_dataset, context_data, r) do |ds|
+        ds.where(~Sequel.expr(Sequel.qualify(raw_dataset.first_source_table, :type) => 'UserResource') |
+                     Sequel.expr(Sequel.qualify(raw_dataset.first_source_table, :record_id) => user_record_id))
+      end
+
+      Resource.raw_dataset.from(cte_table).with_recursive(cte_table, base_ds, r_ds)
+        .where(~Sequel.expr(:type => 'UserResource') | Sequel.expr(:record_id => user_record_id))
+        .order(Sequel.expr(:type => 'UserResource'))
+        .limit(2)
+    end
+
+    resource, user = ds.all
+
+    raise Sequel::NoMatchingRow unless resource
+    raise Forbidden unless user
+
+    resource.instance_variable_set('@permission', PermissionToken.new(user.values[:access]))
+    resource.values.delete(:access)
+    resource
   end
 end
 

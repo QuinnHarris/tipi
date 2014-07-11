@@ -49,5 +49,10 @@ module Tipi
       Sequel.extension :pg_array_ops
       Sequel::Model.plugin :timestamps
     end
+
+    # Don't know if this works
+    config.action_dispatch.rescue_responses.merge!(
+        'Forbidden' => :forbidden
+    )
   end
 end

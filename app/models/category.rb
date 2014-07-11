@@ -105,8 +105,8 @@ class Category < Sequel::Model
 
     current_context(ctx).dataset do |context_data|
       base_ds = base_ds.select_append(
-          Sequel.cast(nil, :bigint).as(:to_version),
-          Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path_context))
+          Sequel.cast(Sequel.pg_array([]), 'integer[] ').as(:branch_path_context),
+          Sequel.cast(nil, :bigint).as(:to_version) )
 
       r_ds = self.dataset_many_to_many(dataset, context_data, r)
 

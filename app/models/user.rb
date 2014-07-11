@@ -26,4 +26,9 @@ class User < Sequel::Model
       user.resource_record_id = 0
     end
   end
+
+  # Used by devise lib/devise/hooks/lockable.rb
+  def update_attribute(key, value)
+    send("#{key}=", value)
+  end
 end

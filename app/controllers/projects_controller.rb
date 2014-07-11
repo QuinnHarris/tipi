@@ -28,7 +28,7 @@ class ProjectsController < ApplicationController
   def set_project
     record_id, branch_id = params[:id].split('-')
     Branch.context(Integer(branch_id), user: current_user) do
-      @project = Project.where(record_id: Integer(record_id)).first
+      @project = Project.access(record_id)
       raise "Project not found" unless @project
     end
   end
