@@ -76,10 +76,17 @@ class Resource < Sequel::Model
     resource.values.delete(:access)
     resource
   end
+
+
+  def access_resources
+    from_dataset.where(:type => 'UserResource').all
+  end
 end
 
 # All User Resources are in the Root Branch
 class UserResource < Resource
+  one_to_one :user, key: :resource_record_id, primary_key: :record_id
+
   def self.public
     return @@public.dup if class_variable_defined?('@@public')
     @@public = where(record_id: 1).first!.freeze

@@ -35,7 +35,7 @@ class ProjectsController < ApplicationController
   public
 
   def edit
-    @project = @project.new
+    @access = @project.access_resources
   end
 
   def update

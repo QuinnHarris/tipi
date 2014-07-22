@@ -22,7 +22,7 @@
         %button#toggle-direction.node-button.fa.fa-arrows-h.fa-lg{title: 'toggle orientation'}
         %button#load-project.node-button.fa.fa-refresh.fa-lg{title: 'refresh'}
       #project-title-container
-        %h3.project-title Project Title
+        %h3.project-title= @project.name
         %div.project-subtitle Project info + rating
       #buttons-right
         %button#fork-project.node-button.fa.fa-code-fork.fa-lg{title: 'Fork this Project'}
