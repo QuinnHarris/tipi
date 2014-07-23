@@ -90,7 +90,9 @@ class CategoriesController < ApplicationController
 
   # DELETE /categories/1
   def destroy
-    @category.delete
+    RootBranch.context(user: current_user) do
+      @category.delete
+    end
     redirect_to categories_url, notice: 'Category was successfully deleted.'
   end
 end

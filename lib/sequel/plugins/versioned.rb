@@ -278,7 +278,8 @@ module Sequel
           ds = self.class.dataset(o.context, no_finalize: true)
           p = ds.where(ds.last_record_id => record_id,
                        ds.last_branch_path => o.branch_path)
-          .order(Sequel.qualify(ds.versioned_table, :version).desc).first
+          .order(Sequel.qualify(ds.opts[:last_joined_table], :depth),
+                 Sequel.qualify(ds.versioned_table, :version).desc).first
           raise VersionedError, "Delete without existing record" unless p
           raise VersionedError, "Delete with existing deleted record" if p.deleted
           o.save
