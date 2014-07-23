@@ -106,8 +106,8 @@ class UserResource < Resource
     r_ds.opts[:versioned_table] = :resources
     r_ds.opts[:partition_columns] = [Sequel.qualify(:resources, :branch_id),
                                      Sequel.qualify(:resources, :record_id)]
-    r_ds.opts[:order_columns] = [Sequel.qualify(:resources, :version),
-                                 Sequel.qualify(:resource_edges, :version)]
+    r_ds.opts[:order_columns] = [Sequel.qualify(:resources, :version).desc,
+                                 Sequel.qualify(:resource_edges, :version).desc]
 
     r_ds = r_ds.finalize(:extra_columns =>
                              (Sequel.qualify(cte_table, :access).sql_number &
@@ -126,7 +126,7 @@ class UserResource < Resource
 
     ds.opts[:last_joined_table] = nil # Don't do branch_path
     ds.opts[:partition_columns] = [:resource_record_id, :category_record_id]
-    ds.opts[:order_columns] = [Sequel.qualify(:category_resource, :version)]
+    ds.opts[:order_columns] = [Sequel.qualify(:category_resource, :version).desc]
 
     ds.finalize(:model_table_name => ds.opts[:from].first,
                 :extra_columns => [:category_record_id, :category_branch_path])

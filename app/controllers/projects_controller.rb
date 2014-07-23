@@ -46,6 +46,15 @@ class ProjectsController < ApplicationController
     end
   end
 
+  def destroy
+    RootBranch.context(user: current_user) do
+      category = Category.where(version: params[:category][:version]).first
+      category.remove_project(@project)
+    end
+
+    redirect_to project_path(@project), notice: 'Project was successfully removed.'
+  end
+
   def clone
     @project = @project.new
   end
