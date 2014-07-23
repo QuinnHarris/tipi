@@ -12,6 +12,7 @@
 //
 //= require jquery
 //= require jquery_ujs
+//= require foundation
 //= require turbolinks
 //= require d3
 //= require froala_editor.min.js
@@ -19,3 +20,5 @@
 //= require alertify
 // Do not require tree as we use controller specific assets but this gets loaded first
 
+
+$(function(){ $(document).foundation(); });

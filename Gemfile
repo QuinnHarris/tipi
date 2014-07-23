@@ -16,7 +16,7 @@ gem 'haml'
 gem 'jquery-rails'
 gem 'jquery-ui-rails'
 
-#gem 'foundation-rails'
+gem 'foundation-rails'
 gem 'd3_rails'
 
 # Turbolinks makes following links in your web application faster. Read more: https://github.com/rails/turbolinks
@@ -71,4 +71,4 @@ gem 'sequel-devise'
 gem 'tzinfo-data', platforms: [:mingw, :mswin]
 gem 'wysiwyg-rails'
 gem 'font-awesome-rails'
-gem 'bootstrap-sass'
+#gem 'bootstrap-sass'

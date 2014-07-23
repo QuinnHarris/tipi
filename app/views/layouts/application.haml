@@ -5,33 +5,48 @@
     %meta{ content: "IE=edge,chrome=1", "http-equiv" => "X-UA-Compatible" }
     %meta{ name: 'viewport', content: "width=device-width, initial-scale=1.0" }
     %title= content_for?(:title) ? yield(:title) : 'Pitri.net'
-    
     %link{href:'http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,400,300,600,700,800', rel: 'stylesheet', type:'text/css'}
+    /= stylesheet_link_tag    "/typicons-font/typicons.min.css" # Typicons in public (not asset)
     = stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true
     = stylesheet_link_tag    params[:controller], media: "all", "data-turbolinks-track" => true
     = javascript_include_tag "application", "data-turbolinks-track" => true
     = javascript_include_tag params[:controller], "data-turbolinks-track" => true
-    /= javascript_include_tag "vendor/modernizr"
+    = javascript_include_tag "vendor/modernizr"
     = csrf_meta_tags
   %body
-    %header.content-header
-      .left
-        =link_to root_path do
-          .logo Pitri.net
-      .center
-        .search
-          .div
-            %input{placeholder: "Search Pitri.net"}
-            .icon.fa.fa-search.fa-lg{title: "search Pitri"}
-      .right
-        =link_to categories_path do
-          %i.browse{title: 'browse Pitri'} browse 
-        -if user_signed_in?
-          =link_to new_project_path do
-            %i.fa.fa-flask.create{title: "new Project"}
-          %i.fa.fa-exclamation-circle.notifications{title: 'notificatioins'}
-          %i.fa.fa-cog.user-menu
-        -else
-          =link_to new_user_session_path do
-            %i.sign-in sign in
-    =yield
+    /[if IE]
+      %div{style: "clear: both; height: 112px; padding:0; position: relative;"}
+        %a{href: "http://www.theie8countdown.com/ie-users-info"}
+          %img{alt: "", border: "0", height: "112", src: "http://www.theie8countdown.com/assets/badge_iecountdown.png", width: "348"}
+    %nav.top-bar{data:{"topbar" => ""}}
+      %ul.title-area
+        %li.name
+          %h1
+            = link_to 'Pitri.net', root_path
+        %li.toggle-topbar.menu-icon
+          %a{href:"#"}
+      %section.top-bar-section
+        / Right Nav Section
+        %ul.right
+          %li= link_to 'Create', projects_path
+          %li= link_to 'Browse', categories_path
+          - if user_signed_in?
+            %li.has-dropdown
+              = link_to 'My Tipi'
+              %ul.dropdown
+                %li= link_to 'My Tipis'
+                %li= link_to 'Profile', edit_user_registration_path
+                %li= link_to 'Log Out', destroy_user_session_path, method: :delete
+          - else
+            %li= link_to 'Sign In', new_user_session_path
+        / Left Nav Section
+        %ul.left
+          %li.has-form
+            .row.collapse
+              = form_tag do
+                .large-9.small-9.columns
+                  = text_field_tag(:search, nil, placeholder: 'Search Tipis')
+                .large-3.small-3.columns
+                  = link_to('Go', nil, class: 'alert button expand')
+  
+    = yield  
