@@ -113,34 +113,4 @@ class Category < Sequel::Model
       dataset.from(cte_table).with_recursive(cte_table, base_ds, r_ds)
     end.distinct
   end
-
-  # !!!! OLD CATEGORY CODE
-
-  Branch
-
-  # This should be removed soon
-  def prev_version(context)
-    ds = dataset_from_context(Branch::Context.new(context.branch), include_all: true)
-    ds = ds.where(Sequel.qualify(table_name, :version) < context.version) if context.version
-    ds.max(Sequel.qualify(table_name, :version))
-  end
-  def next_version(context)
-    return nil unless context.version
-    dataset_from_context(Branch::Context.new(context.branch), include_all: true)
-    .where(Sequel.qualify(table_name, :version) < context.version)
-    .min(Sequel.qualify(table_name, :version))
-  end
-
-#  def parents
-#    return @parents if @parents
-#    @parents = from_dataset.where(type: 'Category').all
-#  end
-
-  def children_and_projects
-    return @children_and_projects if @children_and_projects
-    @children_and_projects = from_dataset.where(type: %w(Category Project)).all
-  end
-
-
-
 end

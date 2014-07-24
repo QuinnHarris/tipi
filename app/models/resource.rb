@@ -92,10 +92,16 @@ class UserResource < Resource
     @@public = where(record_id: 1).first!.freeze
   end
 
-  def self.access_dataset(user, filter = 2147483647)
+  def self.access_dataset(opts = {})
     cte_table = :access_decend
 
-    base_ds = raw_dataset.where(:record_id => [user && user.resource_record_id, 1].compact).finalize
+    user = opts[:user]
+    version = opts[:version]
+    filter = opts[:filter] || 2147483647
+
+    base_ds = raw_dataset.where(:record_id => [user && user.resource_record_id, 1].compact)
+    #base_ds = base_ds.where { |o| o.version <= version } if version
+    base_ds = base_ds.finalize
     base_ds = base_ds.select_append(Sequel.as(filter, :access))
 
     r_ds = Resource.raw_dataset.from(cte_table).join(:resource_edges,
@@ -109,6 +115,8 @@ class UserResource < Resource
     r_ds.opts[:order_columns] = [Sequel.qualify(:resources, :version).desc,
                                  Sequel.qualify(:resource_edges, :version).desc]
 
+    r_ds = r_ds.where { |o| (Sequel.qualify(:resources, :version) <= version) &
+        (Sequel.qualify(:resource_edges, :version) <= version) } if version
     r_ds = r_ds.finalize(:extra_columns =>
                              (Sequel.qualify(cte_table, :access).sql_number &
                                  Sequel.qualify(:resource_edges, :access)).as(:access),
@@ -119,8 +127,8 @@ class UserResource < Resource
     Resource.raw_dataset.from(cte_table).with_recursive(cte_table, base_ds, r_ds)
   end
 
-  def self.access_dataset_with_categories(user, filter = 2147483647)
-    ds = access_dataset(user, filter)
+  def self.access_dataset_with_categories(opts = {})
+    ds = access_dataset(opts)
 
     ds = ds.join(:category_resource, :resource_record_id => :record_id)
 

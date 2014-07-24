@@ -87,7 +87,7 @@ class Sequel::Plugins::Branch::Context
     raise "Can't change branch" if opts[:branch]
     raise "Can't raise version" if version and opts[:version] > version
     c = self.class.new(@branch || @id, opts[:version], opts[:user] || @user)
-    c.instance_variable_set('@data', @data.map { |e| e[:version] = [e[:version], opts[:version]].min })
+    c.instance_variable_set('@data', @data.map { |e| e[:version] = [e[:version], opts[:version]].compact.min })
     c
   end
 

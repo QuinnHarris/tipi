@@ -8,16 +8,25 @@ class CategoriesController < ApplicationController
     #@prev_version = Task.prev_version(@category.context)
     #@next_version = Task.next_version(@category.context)
 
+    # This code isn't entirely correct and probably needs to be redone including
+    # dataset and decend calls
+
+    context_opts = {
+      :user => current_user,
+      :version => params[:version] && Integer(params[:version])
+    }
+
     Resource.db.transaction do
-      resources = UserResource.access_dataset_with_categories(current_user).all
+      resources = UserResource.access_dataset_with_categories(context_opts).all
 
       res_map = Hash.new([])
       resources.each { |r| res_map[r.values[:category_record_id]] += [r] }
 
       exp_cat = Sequel.expr(:record_id => res_map.keys)
       exp_cat |= Sequel.expr(:user_id => current_user.id) if current_user
+      exp_cat &= (Sequel.expr(:version) <= context_opts[:version]) if context_opts[:version]
 
-      context = RootBranch.context(version: params[:version], user: current_user)
+      context = RootBranch.context(context_opts)
       categories = Category.decend(Category.where(exp_cat).finalize, context).all
 
       cat_map = {}
@@ -32,6 +41,24 @@ class CategoriesController < ApplicationController
       end
 
       @category = cat_map[1]
+
+      # Kludgy and buggy find adjacent version
+      version = context_opts[:version]
+      version = [Category, Project].map do |klass|
+        klass.raw_dataset.max(:version)
+      end.compact.max unless version
+
+      @prev_version, @next_version = [:max, :min].map do |aspect|
+        [Category, Project].map do |klass|
+          ds = klass.raw_dataset
+            if aspect == :min
+              ds = ds.where { |o| o.version > version }
+            else
+              ds = ds.where { |o| o.version < version }
+            end
+          ds.send(aspect, :version)
+        end.send(aspect)
+      end
     end
   end
 

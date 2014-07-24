@@ -442,16 +442,6 @@ module Sequel
                       extra_columns: r[:extra_columns])
         end
 
-        # Dataset for latest version of rows within the provided branch (and predecessors)
-        # Join against the branch dataset or table and use a window function to rank first by branch depth (high precident branches) and then latest version.  Only return the 1st ranked results.
-        private
-        def dataset_from_context(context, options = {})
-          context.dataset do |context_dataset|
-            raw_dataset.join_context(context_dataset).finalize(options)
-          end
-        end
-        public
-
         # Kludgy: change dataset if in a context but only provide new behavior once
         # as dataset_from_context and methods it calls will call dataset again.
         # There is probably a better way
