@@ -57,7 +57,7 @@ class CategoriesController < ApplicationController
               ds = ds.where { |o| o.version < version }
             end
           ds.send(aspect, :version)
-        end.send(aspect)
+        end.compact.send(aspect)
       end
     end
   end
