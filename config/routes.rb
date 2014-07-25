@@ -62,6 +62,9 @@ Rails.application.routes.draw do
     member do
       get :search
 
+      get :share
+      get :share_ajax
+
       post :post_doc
       post :write
       

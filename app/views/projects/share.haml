@@ -1,0 +1,13 @@
+%h1 Share project #{@project.name}
+
+%ul
+  - for res in @access
+    %li
+      = res.name
+      -
+      = res.user.try(&:email)
+
+
+%input#share-search{ 'data-path' => share_ajax_project_path(@project) }
+#share-result
+#share-current

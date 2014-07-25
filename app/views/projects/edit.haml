@@ -4,14 +4,6 @@
 
 = link_to 'Remove', project_path(@project), method: :delete
 
-%h2 Access
-%ul
-  - for res in @access
-    %li
-      = res.name
-      -
-      = res.user.try(&:email)
-
 %h2 History
 
 %table

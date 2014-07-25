@@ -23,7 +23,7 @@ class ProjectsController < ApplicationController
     redirect_to project_path(@project), notice: 'Category was successfully created.'
   end
 
-  before_action :set_project, except: [:index, :new, :create]
+  before_action :set_project, except: [:index, :new, :create, :share_ajax]
   private
   def set_project
     record_id, branch_id = params[:id].split('-')
@@ -35,7 +35,7 @@ class ProjectsController < ApplicationController
   public
 
   def edit
-    @access = @project.access_resources
+
   end
 
   def update
@@ -68,6 +68,14 @@ class ProjectsController < ApplicationController
   def destroy
     @project.delete
     redirect_to categories_url, notice: 'Project was successfully deleted'
+  end
+
+  def share
+    @access = @project.access_resources
+  end
+
+  def share_ajax
+    render layout: nil
   end
 
   # GET request at /projects/NUMBER/search{.json}?q=QUERY
