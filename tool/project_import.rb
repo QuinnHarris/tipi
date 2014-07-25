@@ -61,7 +61,7 @@ Task
 
 root_user = User.where(id: 1).first
 
-RootBranch.root.context(user: root_user) do
+RootBranch.branch.context(user: root_user) do
   category = Category.root.get_path(category_path)
 
   category.add_project(name: project_name) do |project|

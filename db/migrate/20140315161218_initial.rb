@@ -235,7 +235,7 @@ Sequel.migration do
     )
 
     # Must be superuser to do this
-    #run "CREATE EXTENSION hstore"
+    run "CREATE EXTENSION hstore" unless Rails.env.production?
 
     create_version_table :resources do
       String        :type, null: false

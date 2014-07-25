@@ -11,9 +11,11 @@ Branch.db.transaction do
   root_branch = RootBranch.create(name: 'Root Branch', merge_point: false)
   raise "Root branch id not 1" unless root_branch.id == 1
 
-  root_user = User.create(email: 'root@pitri.net', password: 'tipiforthepitri',
-                          password_confirmation: 'tipiforthepitri',
-                          resource_record_id: 0)
+  root_user = User.new(email: 'root@pitri.net', password: 'tipiforthepitri',
+                       password_confirmation: 'tipiforthepitri',
+                       resource_record_id: 0)
+  root_user.skip_confirmation!
+  root_user.save
   raise "Root user id not 1" unless root_user.id == 1
 
   root_category = Category.create(name: 'Root Category', branch: root_branch, user: root_user)
