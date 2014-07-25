@@ -24,4 +24,4 @@ test:
 
 production:
   <<: *default
-  database: tipi_production
+  database: pitri_production
