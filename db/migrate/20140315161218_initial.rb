@@ -234,7 +234,8 @@ Sequel.migration do
         FOR EACH ROW EXECUTE PROCEDURE cycle_test();
     )
 
-    run "CREATE EXTENSION hstore"
+    # Must be superuser to do this
+    #run "CREATE EXTENSION hstore"
 
     create_version_table :resources do
       String        :type, null: false
