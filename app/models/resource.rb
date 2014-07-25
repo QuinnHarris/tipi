@@ -85,7 +85,7 @@ end
 
 # All User Resources are in the Root Branch
 class UserResource < Resource
-  one_to_one :user, key: :resource_record_id, primary_key: :record_id
+  #one_to_one :user, key: :resource_record_id, primary_key: :record_id
 
   def self.public
     return @@public.dup if class_variable_defined?('@@public')

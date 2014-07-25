@@ -25,6 +25,8 @@
  * 
  */
 
+//= require_tree ./projects
+
 var margin = { left: 20, top: 20, bottom: 0, right: 0 },
 	svg,
 	svgg,
@@ -111,7 +113,11 @@ function format(){
 }
 
 $(document).ready(function(){
-	dataPath = $('#nodes-container').data().path;
+    // Don't initialize if this is not the appropriate page.  This probably isn't the best way to do this.
+    var container = $('#nodes-container')
+    if (!container.length)
+        return;
+	dataPath = container.data().path;
 	initSvg();
 	backdrop;
 	edit();
@@ -277,7 +283,7 @@ $(document).on('click', '#collapse', collapse);
 
 $(document).on('focusout', '#doc-title', focusoutDocName);
 
-$(document).bind('keyup', '#search-input', searchInput);
+$(document).on('keyup', '#search-input', searchInput);
 
 function dragResize(){
 	console.log(d3.event);
