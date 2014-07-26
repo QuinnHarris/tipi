@@ -82,4 +82,18 @@ Rails.application.configure do
   #config.active_record.dump_schema_after_migration = false
 
   config.action_mailer.default_url_options = { :host => 'www.pitir.net' }
+
+  config.action_mailer.smtp_settings = {
+      address: 'mail.pitri.net',
+      domain: 'pitri,net',
+      # Configured to accept from IP
+      enable_starttls_auto: false
+  }
 end
+
+Rails.application.config.middleware.use ExceptionNotification::Rack,
+  :email => {
+      email_prefix: '[Pitri Error] ',
+      sender_address: %{"Pitir Errors"" <error@pitri.net>},
+      exception_recipients: %w{error@pitri.net}
+  }

@@ -15,7 +15,7 @@ role :db,  %w{deploy@deploy.pitri.net}
 # server list. The second argument is a, or duck-types, Hash and is
 # used to set extended properties on the server.
 
-server 'deploy.pitri.net', user: 'deploy', roles: %w{web app db} #, my_property: :my_value
+server 'deploy.pitri.net', user: 'deploy', roles: %w{web app db}, ssh_options: { port: 24 }#, my_property: :my_value
 
 
 # Custom SSH Options

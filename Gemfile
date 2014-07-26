@@ -59,6 +59,8 @@ gem 'spring',        group: :development
 # Use Capistrano for deployment
 gem 'capistrano', group: :development
 
+gem 'exception_notification', group: :production
+
 # Use debugger
 # gem 'debugger', group: [:development, :test]
 
