@@ -28,7 +28,7 @@
       %section.top-bar-section
         / Right Nav Section
         %ul.right
-          %li= link_to 'Create', projects_path
+          %li= link_to 'Create', new_project_path
           %li= link_to 'Browse', categories_path
           - if user_signed_in?
             %li.has-dropdown

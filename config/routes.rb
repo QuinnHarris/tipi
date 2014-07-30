@@ -56,22 +56,24 @@ Rails.application.routes.draw do
 
   root :to => "home#index"
 
-  resources :categories
+  resource :project, only: [:new, :create]
 
-  resources :projects, except: [:index] do
-    member do
+  resources :categories do
+    resource :project, only: [:new]
+  end
+
+  resources :resources, only: [] do
+    resource :project, except: [:new, :create] do
       get :search
 
       post :post_doc
       post :write
-      
-      get :clone
-      post :branch
-    end
-  end
 
-  resources :access, only: [:show] do
-    member do
+      get :clone
+      post :clone, to: :clone_create
+    end
+
+    resource :access, only: [:show], controller: :access do
       get :search
     end
   end

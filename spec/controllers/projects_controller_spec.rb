@@ -8,7 +8,7 @@ describe ProjectsController do
   end
 
   def write_request(id, data)
-    post :write, { id: id, data: ActiveSupport::JSON.encode(data) }
+    post :write, { resource_id: id, data: ActiveSupport::JSON.encode(data) }
     response_json
   end
 
@@ -21,7 +21,7 @@ describe ProjectsController do
     post :create, { category: { version: 1 }, project: project_attrs }
     project = assigns(:project)
     expect(project.values).to include(project_attrs)
-    expect(response).to redirect_to project_path(project)
+    expect(response).to redirect_to categories_path
     
     # Create Node
     data = (1..2).map do
@@ -49,7 +49,7 @@ describe ProjectsController do
     expect(edge_data.except(:id, :branch_id, :branch_path, :v_record_id, :v_branch_path, :u_record_id, :u_branch_path, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
-    get :show, { id: project.to_param, format: :json }
+    get :show, { resource_id: project.to_param, format: :json }
     expect(response_json).to match_array(data)
 
     # Remove Edge
@@ -60,7 +60,7 @@ describe ProjectsController do
     expect(resp_data.first.except(:id, :branch_id, :branch_path, :v_record_id, :v_branch_path, :u_record_id, :u_branch_path, :created_at)).to eq(edge_attr)
 
     # Retrieve Data
-    get :show, { id: project.to_param, format: :json }
+    get :show, { resource_id: project.to_param, format: :json }
     expect(response_json).to match_array(data)
 
     # Remove Node
@@ -71,7 +71,7 @@ describe ProjectsController do
     expect(resp_data.first).to eq(node_attr)
 
     # Retrieve Data
-    get :show, { id: project.to_param, format: :json }
+    get :show, { resource_id: project.to_param, format: :json }
     expect(response_json).to match_array(data)
 
     # Add Node and Edge in one request
@@ -102,7 +102,7 @@ describe ProjectsController do
 
     # Check post_doc interface
     node_attr = attributes_for(:task_ajax)
-    post :post_doc, { id: project.to_param, version: node_data[:id], body: node_attr[:doc] }
+    post :post_doc, { resource_id: project.to_param, version: node_data[:id], body: node_attr[:doc] }
 
   end
 end

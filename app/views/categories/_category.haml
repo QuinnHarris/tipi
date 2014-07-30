@@ -6,7 +6,7 @@
     \-
   = link_to 'New', new_category_path(:parent => category)
   \-
-  = link_to 'New Project', new_project_path(:category => category)
+  = link_to 'New Project', new_category_project_path(category)
   - unless category.children.empty?
     %ul= render partial: 'category', collection: category.children
   - unless category.resources.empty?

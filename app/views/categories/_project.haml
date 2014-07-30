@@ -1,11 +1,11 @@
 %li
   \--
-  = link_to project.name, project_path(project)
+  = link_to project.name, resource_project_path(project)
   \--
-  = link_to 'Edit', edit_project_path(project)
+  = link_to 'Edit', edit_resource_project_path(project)
   \--
-  = link_to 'Access', access_path(project)
+  = link_to 'Access', resource_access_path(project)
   \-
-  = link_to 'Clone', clone_project_path(project)
+  = link_to 'Clone', clone_resource_project_path(project)
   \-
-  = link_to 'Remove', project_path(project), method: :delete
+  = link_to 'Remove', resource_project_path(project), method: :delete

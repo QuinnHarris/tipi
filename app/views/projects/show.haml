@@ -15,7 +15,7 @@
       %button#doc-view-empty.fa.fa-file.fa-sm{title: 'open doc view'}
 
   %div.drag-bar
-  #nodes-container{ 'data-path' => project_path(@project), 'data-readonly' => @readonly ? 'true' : 'false' }
+  #nodes-container{ 'data-path' => resource_project_path(@project), 'data-readonly' => @readonly ? 'true' : 'false' }
     #buttons-container
       #buttons-left
         %button#add-node.node-button.fa.fa-plus.fa-lg{title: 'Add a new Node'}

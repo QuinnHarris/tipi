@@ -11,7 +11,7 @@ class ProjectsController < ResourcesController
 
   def new
     RootBranch.context(user: current_user) do
-      @category = Category.where(version: params[:category]).first
+      @category = Category.where(version: params[:category_id]).first
       @project = Project.new
     end
   end
@@ -22,7 +22,7 @@ class ProjectsController < ResourcesController
       @project = category.add_project(params[:project])
     end
 
-    redirect_to project_path(@project), notice: 'Category was successfully created.'
+    redirect_to categories_path, notice: 'Project was successfully created.'
   end
 
 
@@ -51,10 +51,10 @@ class ProjectsController < ResourcesController
     @project = @project.new
   end
 
-  def branch
+  def clone_create
     project = @project.clone(params[:project].merge(user: current_user))
 
-    redirect_to project_path(project), notice: 'Project was successfully cloned.'
+    redirect_to categories_path(project), notice: 'Project was successfully cloned.'
   end
 
   def destroy
