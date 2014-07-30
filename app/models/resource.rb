@@ -87,6 +87,15 @@ end
 class UserResource < Resource
   #one_to_one :user, key: :resource_record_id, primary_key: :record_id
 
+  #mount_uploader :avatar, AvatarUploader
+
+  # !! Replace with identifier table (email (multiple), alias)
+  def email; data && data['email']; end
+  def email=(val);
+    self.data = Sequel.hstore({}) unless data
+    self.data['email'] = val;
+  end
+
   def self.public
     return @@public.dup if class_variable_defined?('@@public')
     @@public = where(record_id: 1).first!.freeze

@@ -64,11 +64,16 @@ gem 'exception_notification', group: :production
 # Use debugger
 # gem 'debugger', group: [:development, :test]
 
+gem 'carrierwave-sequel', :require => 'carrierwave/sequel'
+gem 'mini_magick'
 
 gem 'devise'
 gem 'sequel-devise'
 #gem 'omniauth'
 #gem 'omniauth-facebook'
+
+gem 'mailcheckjs-rails', github: 'mjc/mailcheckjs-rails' # Clientside email check
+gem 'mailcheck' # Server side email check for searching
 
 gem 'tzinfo-data', platforms: [:mingw, :mswin]
 gem 'wysiwyg-rails'

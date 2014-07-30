@@ -19,7 +19,7 @@ module Sequel
           raise "Delete not permited on versioned datasets"
         end
 
-        def update
+        def update(columns = nil)
           raise "Update not permited on versioned datasets"
         end
 

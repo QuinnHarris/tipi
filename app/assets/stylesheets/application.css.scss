@@ -14,6 +14,7 @@
  *= require font-awesome
  *= require alertify/core
  *= require alertify/default
+ *= require jquery-ui
  *  Do not require tree as we use controller specific assets but this gets loaded first
  *= require_self
  //= require foundation_and_overrides
