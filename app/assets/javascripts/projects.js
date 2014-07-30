@@ -25,8 +25,6 @@
  * 
  */
 
-//= require_tree ./projects
-
 var margin = { left: 20, top: 20, bottom: 0, right: 0 },
 	svg,
 	svgg,

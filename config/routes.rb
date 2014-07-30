@@ -58,18 +58,21 @@ Rails.application.routes.draw do
 
   resources :categories
 
-  resources :projects do
+  resources :projects, except: [:index] do
     member do
       get :search
-
-      get :share
-      get :share_ajax
 
       post :post_doc
       post :write
       
       get :clone
       post :branch
+    end
+  end
+
+  resources :access, only: [:show] do
+    member do
+      get :search
     end
   end
 

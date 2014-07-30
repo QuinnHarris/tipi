@@ -1,11 +1,6 @@
 require 'spec_helper'
 
 describe ProjectsController do
-  it "renders the index template" do
-    get :index
-    expect(response).to render_template('index')
-  end
-
   def response_json
     array = ActiveSupport::JSON.decode(response.body)
     expect(array).to be_an_instance_of(Array)

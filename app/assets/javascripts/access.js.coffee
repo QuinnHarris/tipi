@@ -1,4 +1,5 @@
 $ ->
+  return unless $("#share-search").length
   $("#share-search").autocomplete(
     appendTo: "#share-result",
     source: $("#share-search").data().path
