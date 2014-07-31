@@ -36,4 +36,26 @@ class AccessController < ResourcesController
       format.json { render :json => result }
     end
   end
+
+  def add
+    @project.context do
+      user = UserResource.where(record_id: params[:id]).first
+      user.add_to(@project)
+    end
+
+    respond_to do |format|
+      format.json { render :json => {} }
+    end
+  end
+
+  def remove
+    @project.context do
+      user = UserResource.where(record_id: params[:id]).first
+      user.remove_to(@project)
+    end
+
+    respond_to do |format|
+      format.json { render :json => {} }
+    end
+  end
 end

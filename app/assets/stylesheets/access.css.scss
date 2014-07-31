@@ -1,12 +1,18 @@
+@import "foundation";
+
 #share-search {
   width: 100%;
 }
 
 ul li {
-  .thumb {
-    float: left;
+  @include grid-row();
+
+  .thumb { @include grid-column(2); }
+  .detail {
+    @include grid-column(6);
+    .name { font-weight: bold; }
   }
-  .name {
-    font-weight: bold;
+  .controls {
+    @include grid-column(4);
   }
 }

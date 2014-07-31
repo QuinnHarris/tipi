@@ -3,11 +3,13 @@
 .row
   .columns.large-6
     %input#share-search{ 'data-path' => search_resource_access_path(@project) }
-    #share-result
   .columns.large-6
     %ul#share-current
       - for res in @access
         %li{ 'id' => res.record_id }
           .thumb= image_tag('user-silhouette.png')
-          .name= res.name
-          .email= mail_to res.user.try(&:email)
+          .detail
+            .name= res.name
+            .email= mail_to res.user.try(&:email)
+          .controls
+            %a{ class: 'remove' } Remove

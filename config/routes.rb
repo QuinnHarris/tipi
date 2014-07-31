@@ -75,6 +75,8 @@ Rails.application.routes.draw do
 
     resource :access, only: [:show], controller: :access do
       get :search
+      put :add
+      delete :remove
     end
   end
 
