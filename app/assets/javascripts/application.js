@@ -18,6 +18,7 @@
 //= require jquery-ui/mouse
 //= require jquery-ui/position
 //= require jquery-ui/autocomplete
+//= require jquery-ui/effect-shake
 
 //= require foundation
 //= require turbolinks

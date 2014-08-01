@@ -78,8 +78,12 @@ class Resource < Sequel::Model
   end
 
 
+  def access_resources_dataset
+    from_dataset.where(:type => 'UserResource')
+  end
+
   def access_resources
-    from_dataset.where(:type => 'UserResource').all
+    access_resources_dataset.all
   end
 end
 

@@ -10,6 +10,6 @@
           .thumb= image_tag('user-silhouette.png')
           .detail
             .name= res.name
-            .email= mail_to res.user.try(&:email)
+            .email= mail_to res.email
           .controls
             %a{ class: 'remove' } Remove
