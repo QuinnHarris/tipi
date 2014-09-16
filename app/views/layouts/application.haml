@@ -28,8 +28,6 @@
       %section.top-bar-section
         / Right Nav Section
         %ul.right
-          %li= link_to 'Create', new_project_path
-          %li= link_to 'Browse', categories_path
           - if user_signed_in?
             %li.has-dropdown
               = link_to 'My Tipi'
@@ -39,14 +37,6 @@
                 %li= link_to 'Log Out', destroy_user_session_path, method: :delete
           - else
             %li= link_to 'Sign In', new_user_session_path
-        / Left Nav Section
-        %ul.left
-          %li.has-form
-            .row.collapse
-              = form_tag do
-                .large-9.small-9.columns
-                  = text_field_tag(:search, nil, placeholder: 'Search Tipis')
-                .large-3.small-3.columns
-                  = link_to('Go', nil, class: 'alert button expand')
-  
+    .container
+      %h4 test
     = yield  
