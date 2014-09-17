@@ -1,4 +1,10 @@
 Rails.application.routes.draw do
+
+  get "mockups/company"
+  get "mockups/process_overview"
+  get "mockups/process_instance"
+  get "mockups/task_view"
+  
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".
 

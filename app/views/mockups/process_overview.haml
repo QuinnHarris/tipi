@@ -1,1 +1,58 @@
-%h2 Application Process
+.row
+	.small-2.columns
+		%h5.c components
+		.area
+	.small-10.columns
+		%h3.c Application Process (template)
+		.area
+		%dl.tabs{"data-tab" => ""}
+			%dd.active
+				%a{:href => "#instances"} Instances
+			%dd
+				%a{:href => "#comments"} Comments
+			%dd
+				%a{:href => "#versions"} Versions
+			%dd
+				%a{:href => "#new"} New
+	.tabs-content
+		#instances.content.active
+			%h4.c Instances
+			%table.ma
+				%thead
+					%td Name
+					%td percent complete
+					%td time since started
+					%td notes
+				%tr
+					%td bobs sanders
+					%td 87%
+					%td 2 days
+					%td his daughter is HOT
+				%tr
+					%td jim flannegan
+					%td 45%
+					%td 2 days
+					%td crazy libertarian
+				%tr
+					%td john seymore
+					%td 30%
+					%td 1 week
+					%td this guy is rich AF
+		#comments.content
+			%h4.c Comments
+			.area.ma
+		#versions.content
+			%h4.c Versions
+			.area.ma
+		#new.content
+			%h4.c New Instance
+			%table.ma
+				%tr
+					%td name
+					%td
+						%input
+				%tr
+					%td notes
+					%td
+						%input
+			%button.ma add field

@@ -17,30 +17,54 @@
  *= require jquery-ui
  *  Do not require tree as we use controller specific assets but this gets loaded first
  *= require_self
- //= require foundation_and_overrides
-
  */
 
 @import 'variables';
-
-body{
-  padding:0,0,0,0;
-  margin:0;
-  font-family: $font;
-  input{
-    font-family: $font;
-  }
-  /*background: $s2ll;*/
-}
-
-button{
-  background: $sl;
-  border: none;
-  height: 2em;
-  width: 2em;
-}
+@import 'foundation_and_overrides';
 
 .hidden{display: none;}
+
+.arrow{
+	font-size: 16px;
+}
+.fullWidth {
+   width: 100%;
+   margin-left: auto;
+   margin-right: auto;
+   max-width: initial;
+}
+
+.sm{
+	margin: 0;
+	padding: 2px;
+	border-radius: 2px;
+}
+
+
+.lnav{
+	ul{
+		list-style: none;
+	}
+	.la:before{
+		content: '▸ ';
+	}
+	.da:before{
+		content: '▾ ';
+	}
+	.cat{
+
+	}
+	.task{
+
+	}
+	.process{
+
+	}
+	.active{
+		font-weight: bold;
+		color: tomato;
+	}
+}
 
 .content-header{
 	display: flex;
@@ -114,3 +138,12 @@ button{
   margin: auto;
   background: $s2ll;
 }
+
+
+.side-bar{
+	min-width: 250px;
+	width: 20%;
+	height: 100%;
+	background: lightgrey;
+}
+
