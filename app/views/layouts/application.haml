@@ -37,40 +37,40 @@
                 %li= link_to 'Log Out', destroy_user_session_path, method: :delete
           - else
             %li= link_to 'Sign In', new_user_session_path
-    //- if user_signed_in?
-    .row.fullWidth
-      .large-3.small-4.columns.lnav
-        %h5 Your Name
-        %ul
-          %li.da Tasks
+    - if user_signed_in? || Rails.env.development?
+      .row.fullWidth
+        .large-3.small-4.columns.lnav
+          %h5 Your Name
           %ul
-            %li.la Upcoming Tasks
-            %li.da context 1
+            %li.da Tasks
             %ul
-              %li.da subcontext
+              %li.la Upcoming Tasks
+              %li.da context 1
               %ul
-                %li task
-                %li task
-            %li task 1
-            %li task 2
-            %li task 3
-            %li ...
-          %li.da Processes
-          %ul
-            %li.da Company One
-            %ul
-              %li.da Sales Department
-              %ul
-                %li.da Lead to Sale
+                %li.da subcontext
                 %ul
-                  %li recieve email
-                  %li second task
-                  %li third task
-                %li.la Annual Sales Event
-                %li.la Master Sales Process
-              %li.la Marketing Department
-              %li.la Customer Service Team
-            %li.la ABC company
-            %li.la Devil Worshipers Association
-      .large-9.small-8.columns
-        = yield
+                  %li task
+                  %li task
+              %li task 1
+              %li task 2
+              %li task 3
+              %li ...
+            %li.da Processes
+            %ul
+              %li.da Company One
+              %ul
+                %li.da Sales Department
+                %ul
+                  %li.da Lead to Sale
+                  %ul
+                    %li recieve email
+                    %li second task
+                    %li third task
+                  %li.la Annual Sales Event
+                  %li.la Master Sales Process
+                %li.la Marketing Department
+                %li.la Customer Service Team
+              %li.la ABC company
+              %li.la Devil Worshipers Association
+        .large-9.small-8.columns
+          = yield
