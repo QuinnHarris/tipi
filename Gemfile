@@ -16,7 +16,7 @@ gem 'haml'
 gem 'jquery-rails'
 gem 'jquery-ui-rails'
 
-gem 'foundation-rails'
+gem 'foundation-rails', '~> 5.3.1.0'
 gem 'd3_rails'
 
 # Turbolinks makes following links in your web application faster. Read more: https://github.com/rails/turbolinks
@@ -57,8 +57,10 @@ gem 'spring',        group: :development
 # gem 'unicorn'
 
 # Use Capistrano for deployment
+gem 'capistrano', group: :development
 gem 'capistrano-bundler', group: :development
 gem 'capistrano-rails', group: :development
+
 
 gem 'exception_notification', group: :production
 
