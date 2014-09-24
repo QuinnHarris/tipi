@@ -37,7 +37,8 @@
                 %li= link_to 'Log Out', destroy_user_session_path, method: :delete
           - else
             %li= link_to 'Sign In', new_user_session_path
-    - if user_signed_in? || Rails.env.development?
+    - if user_signed_in? 
+      <!-- || Rails.env.development?-->
       .row.fullWidth
         .large-3.small-4.columns.lnav
           %h5 Your Name
