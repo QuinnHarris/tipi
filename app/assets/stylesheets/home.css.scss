@@ -3,24 +3,55 @@ body, html{
 }
 .home-outer{
     
+  background-image : url('mammoth.jpg');
+  background-size: cover;
+  background-attachment: fixed;
+
   .parallax {
+    box-shadow: inset 0 0 1em #111;
+    background-color: beige;
     [class*="bg__"] {
       position : relative;
 
-      height : 50vh;
-
-      text-indent : -9999px;
-
       background-attachment : fixed;
       background-position   : top center;
-      background-size       : cover;
-      
-      &:nth-child( 2n ) {
+      background-size       : 100% auto;
+
+      &:nth-child( 2n-1 ) {
         box-shadow : inset 0 0 1em #111; 
       }
     }
+
+    .sm{height: 15vh;}
+    .med{height: 30vh;}
+    .lg{height: 50vh;}
+    .xl{height: 65vh;}
+    .full{height: 100%;}
     
     .bg__mammoth {background-image : url('mammoth.jpg');}
-
+    .bg__mammoth-devil {background-image : url('mammoth-devil.jpg');}
+    .bg__mammoth-devil-glow {background-image : url('mammoth-devil-glow.jpg');}
+    .bg__mammoth-winter {background-image : url('mammoth-winter.jpg');}
+    .bg__mammoth-bright {background-image : url('mammoth-bright.jpg');}
+    .bg__mammoth-bright-2 {background-image : url('mammoth.jpg');}
+    .bg__mammoth-hope {background-image : url('mammoth-hope.jpg');}
+    .bg__mammoth-static {background-image : url('mammoth-static.jpg');}
+    .bg__mammoth-graphiti {background-image : url('mammoth-graphiti.jpg');}
+    .bg__mammoth-rainbow {background-image : url('mammoth-rainbow.jpg');}
+  }
+  .foragainst{
+    width: 100%;
+    margin-bottom: 0;
+    td{
+      width: 50%;
+    }
+    thead{
+      td{
+        text-align: center;
+      }
+    }
+  }
+  .right-box{
+    position: fixed;
   }
 }
