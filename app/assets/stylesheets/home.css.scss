@@ -1,40 +1,47 @@
-body, html{
-    height: 100%;
-}
-.home-outer{
-    
 
+.home-outer{
+  background-image:  url('http://www.wallpaper4me.com/images/wallpapers/bluefadetovivid-352742.jpeg');
+  background-attachment: fixed;
+  background-size: cover;
   .parallax {
     box-shadow: inset 0 0 1em #111;
     background-color: beige;
     [class*="bg__"] {
       position : relative;
 
+      margin: 1em 0;
+
       background-attachment : fixed;
       background-position   : top center;
       background-size       : cover;
 
-      &:nth-child( 2n-1 ) {
-        box-shadow : inset 0 0 1em #111; 
-      }
+      box-shadow : inset 0 0 1em #111; 
     }
 
     .sm{height: 15vh;}
-    .med{height: 30vh;}
+    .med{height: 40vh;}
     .lg{height: 50vh;}
     .xl{height: 65vh;}
     .full{height: 100%;}
-    
-    .bg__mammoth {background-image : url('mammoth.jpg');}
-    .bg__mammoth-devil {background-image : url('mammoth-devil.jpg');}
-    .bg__mammoth-devil-glow {background-image : url('mammoth-devil-glow.jpg');}
-    .bg__mammoth-winter {background-image : url('mammoth-winter.jpg');}
-    .bg__mammoth-bright {background-image : url('mammoth-bright.jpg');}
-    .bg__mammoth-bright-2 {background-image : url('mammoth.jpg');}
-    .bg__mammoth-hope {background-image : url('mammoth-hope.jpg');}
-    .bg__mammoth-static {background-image : url('mammoth-static.jpg');}
-    .bg__mammoth-graphiti {background-image : url('mammoth-graphiti.jpg');}
-    .bg__mammoth-rainbow {background-image : url('mammoth-rainbow.jpg');}
+
+    .mickey{position: relative;}
+    .mickey:after{
+      content : "";
+      display: block;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      background-image: url('https://drive.google.com/uc?export=view&id=0ByFvFGsDwQ5OUHBnWi1JaHlNd00');
+      background-repeat: no-repeat;
+      background-size: contain;
+      background-position: center;
+      margin:auto;
+      width: 100%;
+      height: 100%;
+      opacity : 0.3;
+      z-index: 1;
+    }
+    .bg__mammoth {background-image : url('https://drive.google.com/uc?export=view&id=0ByFvFGsDwQ5OZ01DRjRHV3U4bXM');}
   }
   .foragainst{
     width: 100%;
@@ -50,5 +57,305 @@ body, html{
   }
   .right-box{
     position: fixed;
+  }
+}
+
+/* Basic styles for codrops demo */
+@import url(http://fonts.googleapis.com/css?family=Lato:300,400,700);
+
+.email{
+ 
+  height: 100vh;
+
+  a:hover,
+  a:active {
+    color: #333;
+  }
+
+  .main {
+    display: block;
+    margin: auto;
+    padding: .5em;
+    text-align: center;
+    font-family: 'Lato', Calibri, Arial, sans-serif;
+    color: #ffe8e7;
+    background: #E96D65;
+    font-weight: 300;
+    position: fixed;
+    bottom: 5vh;
+    margin-right: 1em;
+
+    input{
+      background: initial;
+    }
+  }
+}
+
+/* natural language form */
+
+.nl-form {
+  width: 100%;
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
+.nl-form ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* normalize the input elements, make them look like everything else */
+.nl-form input,
+.nl-form select,
+.nl-form button {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.nl-form input:focus {
+  outline: none;
+}
+
+/* custom field (drop-down, text element) styling  */
+.nl-field {
+  display: inline-block;
+  position: relative;
+}
+
+.nl-field.nl-field-open {
+  z-index: 10000;
+}
+
+/* the toggle is the visible part in the form */
+.nl-field-toggle,
+.nl-form input,
+.nl-form select  {
+  line-height: inherit;
+  display: inline-block;
+  color: #b14943;
+  cursor: pointer;
+  border-bottom: 1px dashed #b14943;
+}
+
+/* drop-down list / text element */
+.nl-field ul {
+  position: absolute;
+  visibility: hidden;
+  background: #76C3BD;
+  left: -0.5em;
+  top: 50%;
+  font-size: 80%;
+  opacity: 0;
+  -webkit-transform: translateY(-40%) scale(0.9);
+  -moz-transform: translateY(-40%) scale(0.9);
+  transform: translateY(-40%) scale(0.9);
+  -webkit-transition: visibility 0s 0.3s, opacity 0.3s, -webkit-transform 0.3s;
+  -moz-transition: visibility 0s 0.3s, opacity 0.3s, -moz-transform 0.3s;
+  transition: visibility 0s 0.3s, opacity 0.3s, transform 0.3s;
+}
+
+.nl-field.nl-field-open ul {
+  visibility: visible;
+  opacity: 1;
+  -webkit-transform: translateY(-50%) scale(1);
+  -moz-transform: translateY(-50%) scale(1);
+  transform: translateY(-50%) scale(1);
+  -webkit-transition: visibility 0s 0s, opacity 0.3s, -webkit-transform 0.3s;
+  -moz-transition: visibility 0s 0s, opacity 0.3s, -moz-transform 0.3s;
+  transition: visibility 0s 0s, opacity 0.3s, transform 0.3s;
+}
+
+.nl-field ul li {
+  color: #fff;
+  position: relative;
+}
+
+.nl-dd ul li {
+  padding: 0 1.5em 0 0.5em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nl-dd ul li.nl-dd-checked {
+  color: #478982;
+}
+
+.no-touch .nl-dd ul li:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.no-touch .nl-dd ul li:hover:active {
+  color: #478982;
+}
+
+/* icons for some elements */
+.nl-dd ul li.nl-dd-checked:before,
+.nl-submit:before,
+.nl-field-go:before {
+  font-family: FontAwesome;
+}
+
+.nl-dd ul li.nl-dd-checked:before {
+  content: "";
+  position: absolute;
+  right: 1em;
+  font-size: 50%;
+  line-height: 3;
+}
+
+.nl-ti-text ul {
+  min-width: 8em;
+}
+
+.nl-ti-text ul li.nl-ti-input input {
+  width: 100%;
+  padding: 0.2em 2em 0.2em 0.5em;
+  border-bottom: none;
+  color: #fff;
+}
+
+.nl-form .nl-field-go {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  cursor: pointer;
+  background: rgba(0,0,0,0.1);
+  width: 1.8em;
+  text-align: center;
+  color: transparent;
+}
+
+.nl-field-go:before {
+  content: "";
+  font-size: 75%;
+  color: #fff;
+  width: 100%;
+  line-height: 2.5;
+  display: block;
+}
+
+/* custom placeholder color */
+input::-webkit-input-placeholder {
+  color: rgba(255,255,255,0.8);
+}
+
+input:active::-webkit-input-placeholder ,
+input:focus::-webkit-input-placeholder {
+  color: rgba(255,255,255,0.2);
+}
+
+input::-moz-placeholder {
+  color: rgba(255,255,255,0.8);
+}
+
+input:active::-moz-placeholder,
+input:focus::-moz-placeholder {
+  color: rgba(255,255,255,0.2);
+}
+
+input:-ms-input-placeholder {  
+  color: rgba(255,255,255,0.8);
+}
+
+input:active::-ms-input-placeholder ,
+input:focus::-ms-input-placeholder {
+  color: rgba(255,255,255,0.2);
+}
+
+/* example field below text input */
+.nl-ti-text ul li.nl-ti-example {
+  font-size: 40%;
+  font-style: italic;
+  font-weight: 400;
+  padding: 0.4em 1em;
+  color: rgba(0,0,0,0.2);
+  border-top: 1px dashed rgba(255,255,255,0.7);
+}
+
+.nl-ti-text ul li.nl-ti-example em {
+  color: #fff
+}
+
+/* submit button */
+.nl-submit-wrap {
+  margin-top: 0.4em;
+}
+
+.nl-form .nl-submit {
+  line-height: 3;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  background: #76C3BD;
+  color: #fff;
+  padding: 0 1em 0 0;
+  font-size: 40%;
+  font-weight: bold;
+  letter-spacing: 3px;
+}
+
+.nl-submit:before {
+  content: '';
+  color: #fff;
+  float: left;
+  padding: 0 0.7em;
+  margin: 0 0.8em 0 0;
+  background: #69B1A9;
+}
+
+.no-touch .nl-form .nl-submit:hover,
+.no-touch .nl-form .nl-submit:active {
+  background: #69B1A9;
+}
+
+.no-touch .nl-form .nl-submit:hover:before {
+  background: #58a199;
+}
+
+/* overlay becomes visible when a field is opened */
+.nl-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  opacity: 0;
+  z-index: 9999;
+  visibility: hidden;
+  -webkit-transition: visibility 0s 0.3s, opacity 0.3s;
+  -moz-transition: visibility 0s 0.3s, opacity 0.3s;
+  transition: visibility 0s 0.3s, opacity 0.3s;
+}
+
+.nl-field.nl-field-open ~ .nl-overlay {
+  opacity: 1;
+  visibility: visible;
+  -webkit-transition-delay: 0s;
+  -moz-transition-delay: 0s;
+  transition-delay: 0s;
+}
+
+@media screen and (max-width: 45em) {
+  .nl-form {
+    font-size: .9em;
+  }
+}
+
+@media screen and (max-width: 25em) {
+  .nl-form {
+    font-size: .5em;
   }
 }
